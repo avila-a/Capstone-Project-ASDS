@@ -1,0 +1,109 @@
+---
+title: "Download eurostat"
+author: "Antonio Avila"
+date: "03/02/2020"
+output: html_document
+---
+Intro
+
+```{r message=FALSE, warning=FALSE}
+library(eurostat)
+library(httr)
+library(jsonlite)
+library(tidyverse)
+library(plyr)
+```
+
+Download
+
+```{r}
+# http://ropengov.github.io/eurostat/articles/eurostat_tutorial.html
+search <- search_eurostat("by NUTS 3")
+search
+```
+
+```{r}
+filter_nuts <- function(data, nuts) {
+  result <- data %>%
+    mutate(geo_char = as.character(geo)) %>%
+    filter(nchar(geo_char) == nuts + 2) %>%
+    select(-geo_char)
+  return(result)
+}
+
+list_euro_data <- c("nama_10r_3gdp", "nama_10r_3gva")
+```
+
+
+```{r}
+gdp <- get_eurostat("nama_10r_3gdp",
+  time_format = "num")
+
+gdp <- filter_nuts(gdp, 3)
+
+# Filter all other indicators such as "milion units of national currenct or EU %.
+gdp <- gdp %>%
+  filter((unit %in% c("MIO_EUR", "EUR_HAB", "MIO_PPS")))
+
+
+gdp$unit %>% table()
+gdp %>% head()
+```
+
+
+```{r}
+employment <- get_eurostat("nama_10r_3empers",
+  time_format = "num")
+
+emp <- filter_nuts(employment, 3)
+
+emp <- emp %>%
+  mutate(nace = revalue(nace_r2,
+    c("A" = "Agriculture, forestry and fishing",
+      "B-E" = "Industry (except construction)",
+      "C" = "Manufacturing",
+      "F" = "Construction",
+      "G-J" = "Wholesale and retail trade; transport; accommodation and food service activities; information and communication",
+      "G-I" = "Wholesale and retail trade, transport, accommodation and food service activities",
+      "J" = "Information and communication",
+      "K-N" = "Financial and insurance activities; real estate activities; professional, scientific and technical activities; administrative and support service a...",
+      "K" = "Real estate activities",
+      "M_N" = "Professional, scientific and technical activities; administrative and support service activities",
+      "O-U" = "Public administration and defence; compulsory social security; education; human health and social work activities; arts, entertainment and recreati...",
+      "O-Q" = "Public administration, defence, education, human health and social work activities",
+      "R-U" = "Arts, entertainment and recreation; other service activities; activities of household and extra-territorial organizations and bodies")))
+
+emp <- emp %>%
+  mutate(var = revalue(wstatus, 
+                       c("EMP" = "Employed persons",
+                         "SAL" = "Employees"))) %>%
+  select(-wstatus)
+
+head(emp)
+summary(emp)
+colSums(is.na(emp))
+```
+
+
+```{r}
+####
+# url_eurostat <- "http://ec.europa.eu/eurostat/wdds/rest/data/v2.1/json/en/"
+#
+# url_employment <- "nama_10r_3empers?geoLevel=nuts3&filterNonGeo=1&precision=2&wstatus=EMP&wstatus=SAL&nace_r2=A&nace_r2=B-E&nace_r2=C&nace_r2=F&nace_r2=G-I&nace_r2=G-J&nace_r2=J&nace_r2=K&nace_r2=K-N&nace_r2=L&nace_r2=M_N&nace_r2=O-Q&nace_r2=O-U&nace_r2=R-U&nace_r2=TOTAL"
+#
+# raw.employment <- GET(url = paste0(url_eurostat,url_employment))
+# raw.employment$status_code
+# raw.employment <- rawToChar(raw.employment$content)
+# list.employment <- fromJSON(raw.employment)
+# str(list.employment)
+#
+# employment <- do.call(what = "rbind",
+#                       args = lapply(list.employment, as.data.frame))
+```
+
+notes:
+
+```{r}
+plot(eurostat_geodata_60_2016)
+```
+

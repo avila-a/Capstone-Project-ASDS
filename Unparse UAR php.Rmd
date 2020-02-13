@@ -1,0 +1,250 @@
+---
+title: "Unparse UAR php"
+author: "Antonio Avila"
+date: "06/02/2020"
+output: html_document
+---
+
+
+```{r message=FALSE, warning=FALSE}
+library(jsonlite)
+library(dplyr)
+library(rvest)
+setwd("~/A - Estudios/LSE - Applied Social Data Science/Project/PM2.5/Data Europe/")
+```
+
+1. Read the data:
+
+```{r}
+uar <- read_json(path = "Urb. Access Reg data mapapi.txt", 
+                      simplifyVector = TRUE)[[1]]
+# "Low Emission Zone in place since the 1st" (or similar, say the day of the beguinning.)
+uar %>% head()
+uar[4:7, 2]
+# I could make a scraper that goes to every page and gets more information.
+
+# From the "introtext" I colud also get some information about when it started:
+uar$introtext[2] %>% cat()
+```
+
+Get the meanings of the colours:
+
+https://urbanaccessregulations.eu/userhome/map#car
+
+```{r}
+uar <- uar %>%
+  mutate(
+    lez = ifelse(scheme_color == 1, TRUE, FALSE),
+    urb_toll = ifelse(scheme_color == 2, TRUE, FALSE),
+    other_reg = ifelse(scheme_color == 3, TRUE, FALSE),
+    em_scheme = ifelse(scheme_color == 4, TRUE, FALSE),
+    city_latitude = as.numeric(city_latitude),
+    city_longitude = as.numeric(city_longitude)
+  )
+
+uar %>% head()
+```
+
+
+Read the scheme data
+
+```{r}
+# This gives me the lists of names and their Ids
+allscheme <- read_json(path = "AllScheme.txt", 
+                      simplifyVector = TRUE)[[1]]
+write.csv(x = uar, file = "uar.csv")
+write.csv(x = allscheme, file = "id_name_pairs.csv")
+```
+
+
+## Get the data grom GreenZones.eu
+
+```{r}
+library(DBI)
+con <- dbConnect(RSQLite::SQLite(), dbname = "Greenzonesapp/db_greenzones.db")
+
+# Explore:
+dbListTables(con)
+dbListFields(con, "Land")
+DBI::dbGetQuery(con, "SELECT * from Zonenvorwarnung") 
+# Kraftstoff -> Fuel
+# SondereigenschaftAusprägung "specifics" look at "SondereigenschaftAusprägungTranslation".
+# This works with "ZoneAusnahmeMap"(Zone exception map)
+
+# This gives which distictives can enter where:
+DBI::dbGetQuery(con, "SELECT * from ZonePlaketteMap") %>% head()
+DBI::dbGetQuery(con, "SELECT * from Plakette") # Details and name of distinctives
+
+
+# Vehicles:
+# Types of vehicles and their category
+DBI::dbGetQuery(con, "SELECT * from Fahrzeugart") %>% head()
+```
+
+
+```{r}
+zones <- DBI::dbGetQuery(con, "SELECT Zone.*, Land.TitelLocal 
+                         from Zone
+                         LEFT JOIN Land ON Zone.LandId = Land.Id")
+
+# Figure out the translation for datetimes:
+# (PROBABLY ADD A COUPLE MORE TO INCREASE ACCURACY? WORKS PERFECT NOW...)
+dates <- c("20080101", "20150901", "20190502", "20170101")
+dates <- as.integer(lubridate::ymd(dates))
+numbers <- c(633347424, 635766624, 636923520, 636188256)
+lm_dates <- lm(dates ~ numbers, model = TRUE)
+lm_dates
+plot(dates, numbers, type="b")
+
+zones %>% head()
+
+zones <- zones %>%
+  mutate(
+    InPlaceSince = lubridate::as_date(
+      floor(InkraftSeit*lm_dates$coefficients[2])/1000000000 + lm_dates$coefficients[1]),
+    lat = (MaxLatitude + MinLatitude)/2,
+    lon = (MaxLongitude + MinLongitude)/2
+    ) %>%
+  select(-c("InkraftSeit", "MaxLatitude", "MinLatitude",
+            "MaxLongitude", "MinLongitude"))
+
+zones %>% head()
+
+# I could get the translation (of countries) in English too
+
+```
+
+
+This was quite nice, if I want to get the geografies and more data I should look at the dll files (for which I need a compiler from Hex)
+
+## Objective now: 
+
+Objective: 
+
+1. Merge data from all sources with one Nuts3 region as an observation and with
+
+(a) Which UAR have been applied in that zone, (DONE)
+(b) from when? (DONE)
+(c) any economical data from Eurostat. (TO DO)
+(d) Look at sources of air pollution (TO DO)
+
+
+Use the coordinates to know which NUTS 3 regions are "treated" OR "not in the control" group
+
+```{r}
+library("rgdal")
+
+# Source: https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/administrative-units-statistical-units/nuts
+# (higher quality available)
+basis <- "~/A - Estudios/LSE - Applied Social Data Science/Project/PM2.5/NUTS3/"
+e2016 <- "ref-nuts-2016-01m/NUTS_RG_01M_2016_4326.shp/"
+e2006 <- "ref-nuts-2006-01m/NUTS_RG_01M_2006_4326.shp/"
+wd2016 <- paste(basis, e2016, sep = "")
+wd2006 <- paste(basis, e2006, sep = "")
+
+setwd(wd2016)
+shData2016 <- readOGR(".", "NUTS_RG_01M_2016_4326")
+shData2016 <- spTransform(shData2016, CRS("+proj=longlat +datum=WGS84 +no_defs"))
+
+# class(shData2016)
+
+NUTS1_16 <- shData2016[shData2016$LEVL_CODE == 1, ]
+NUTS2_16 <- shData2016[shData2016$LEVL_CODE == 2, ]
+NUTS3_16 <- shData2016[shData2016$LEVL_CODE == 3, ]
+class(NUTS3_16)
+
+NUTS3_16@data %>%
+  mutate(NUTS_NAME = NUTS_NAME %>% as.character()) -> NUTS3_16@data
+Encoding(NUTS3_16@data$NUTS_NAME) <- "UTF-8"
+
+NUTS3_16@data %>% head()
+```
+
+
+```{r}
+# Convert data from cities into points:
+## From UAR:
+uar_sp <- SpatialPointsDataFrame(
+  coords = cbind(uar$city_longitude, uar$city_latitude),
+  data = uar
+)
+
+# uar$points <- SpatialPoints(cbind(uar$city_latitude, uar$city_longitude))
+proj4string(uar_sp) <- CRS("+proj=longlat +datum=WGS84 +no_defs")
+NUTS3_16 <- spTransform(NUTS3_16, CRS("+proj=longlat +datum=WGS84 +no_defs"))
+
+
+## From GreenZones:
+gzones_sp <- SpatialPointsDataFrame(
+  coords = cbind(zones$lon, zones$lat),
+  data = zones
+)
+proj4string(gzones_sp) <- CRS("+proj=longlat +datum=WGS84 +no_defs")
+
+
+plot(gzones_sp, col = "red")
+plot(uar_sp, col = "blue", add = TRUE)
+plot(NUTS3_16, add= TRUE) #
+# zones$points <- SpatialPoints(cbind(zones$lat, zones$lon))
+
+
+# result <- uar$points %>% over(NUTS3_16)
+# result %>% head()
+```
+
+
+```{r}
+library(sf)
+
+# Convert to sf-objects
+nuts.sf <- st_as_sf(NUTS3_16)
+uar_points.sf <- st_as_sf(uar_sp)
+gzones_sp.sf <- st_as_sf(gzones_sp)
+
+# Keep all "meuse.sf", sort by row.names(meuse.sf). Default overlay is "intersects".
+uar_points.sf_nuts <- st_join(uar_points.sf, nuts.sf) 
+gzones_sp.sf_nuts <- st_join(gzones_sp.sf, nuts.sf) 
+
+gzones_sp.sf_nuts %>% as.data.frame() %>% head()
+# st_contains(points.sf, nuts.sf)
+
+plot(uar_points.sf_nuts)
+plot(gzones_sp.sf_nuts)
+plot(nuts.sf$geometry)
+
+# Convert back to Spatial*
+uar_nuts <- as(uar_points.sf_nuts, "Spatial")
+gz_nuts <- as(gzones_sp.sf_nuts, "Spatial")
+# srdf_meuse <- as(srdf_meuse, "Spatial")
+
+gzones_sp.sf_nuts %>% as.data.frame() %>%
+      group_by(NUTS_ID) %>% 
+      summarise(min_time = min(InPlaceSince)) -> min_time
+
+nuts.sf %>%
+  mutate(
+    appl_uar = NUTS_ID %in% uar_points.sf_nuts$NUTS_ID,
+    appl_gz = NUTS_ID %in% gzones_sp.sf_nuts$NUTS_ID
+    # min_apl_date = gzones_sp.sf_nuts$min_time
+  ) %>%
+  left_join(min_time) -> nuts.sf
+
+nuts.sf %>% as.data.frame() %>% head(20)
+```
+
+
+
+
+## Extras:
+
+### Try to extract kmls (geographies of all LEZ):
+
+```{r}
+# library(rgdal)
+# belg_ghent = readOGR(dsn = "~/A - Estudios/LSE - Applied Social Data Science/Project/PM2.5/Data Europe/BelgienGent.kmls")
+# ??readOGR
+```
+
+### Good info on spatial analysis:
+
+https://mgimond.github.io/Spatial/uncertainty-in-census-data.html
