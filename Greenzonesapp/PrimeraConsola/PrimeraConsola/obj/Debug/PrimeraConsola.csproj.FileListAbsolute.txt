@@ -1,0 +1,6 @@
+C:\Users\aavil\OneDrive\Documentos\A - Estudios\LSE - Applied Social Data Science\Project\PM2.5\Data Europe\Greenzonesapp\PrimeraConsola\PrimeraConsola\bin\Debug\PrimeraConsola.exe.config
+C:\Users\aavil\OneDrive\Documentos\A - Estudios\LSE - Applied Social Data Science\Project\PM2.5\Data Europe\Greenzonesapp\PrimeraConsola\PrimeraConsola\bin\Debug\PrimeraConsola.exe
+C:\Users\aavil\OneDrive\Documentos\A - Estudios\LSE - Applied Social Data Science\Project\PM2.5\Data Europe\Greenzonesapp\PrimeraConsola\PrimeraConsola\bin\Debug\PrimeraConsola.pdb
+C:\Users\aavil\OneDrive\Documentos\A - Estudios\LSE - Applied Social Data Science\Project\PM2.5\Data Europe\Greenzonesapp\PrimeraConsola\PrimeraConsola\obj\Debug\PrimeraConsola.csprojAssemblyReference.cache
+C:\Users\aavil\OneDrive\Documentos\A - Estudios\LSE - Applied Social Data Science\Project\PM2.5\Data Europe\Greenzonesapp\PrimeraConsola\PrimeraConsola\obj\Debug\PrimeraConsola.exe
+C:\Users\aavil\OneDrive\Documentos\A - Estudios\LSE - Applied Social Data Science\Project\PM2.5\Data Europe\Greenzonesapp\PrimeraConsola\PrimeraConsola\obj\Debug\PrimeraConsola.pdb

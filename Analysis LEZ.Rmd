@@ -1,0 +1,308 @@
+---
+title: "Analysis LEZ"
+author: '41783'
+date: "25/02/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r message=FALSE, warning=FALSE}
+# library(jsonlite)
+library(tidyverse)
+library(rvest)
+library(sf)
+library("rgdal")
+library(DBI)
+```
+
+```{r}
+nuts.sf <- readOGR("data", "nuts_sf")
+
+nuts.sf@data <- nuts.sf@data %>%
+  mutate(NUTS_NAME = NUTS_NAME %>% as.character(),
+         min_time = as.Date(min_time))
+Encoding(nuts.sf@data$NUTS_NAME) <- "UTF-8"
+
+# Convert to sf-objects
+nuts.sf <- st_as_sf(nuts.sf)
+
+
+nuts.sf %>% as.data.frame() %>% head()
+```
+
+### Data from Eurostat:
+
+```{r}
+# emp <- read.csv(file = "data/eurostat_employment.csv")
+gdp <- read.csv(file = "data/eurostat_gdp_complete.csv")
+
+gdp %>% summary
+# emp %>% summary
+
+gdp_wide <- gdp %>% 
+  filter(unit == "MIO_EUR") %>%
+  select(values, geo, time) %>%
+  pivot_wider(names_from = time, values_from = values)
+gdp_wide
+
+
+# emp_wide <- emp %>% 
+#   filter(time == 2017,
+#          wstat == "Employed persons") %>%
+#   select(nace_r2, values, geo) %>%
+#   pivot_wider(names_from = nace_r2, values_from = values)
+
+# Why aren't they of the same length? ¿is it turkey?
+length(unique(gdp$geo))
+length(unique(nuts.sf$NUTS_ID))
+
+
+nuts.sf.data <- nuts.sf %>%
+  left_join(emp_wide, by = c("NUTS_ID" = "geo")) %>%
+  left_join(gdp_wide, by = c("NUTS_ID" = "geo"))
+
+# Which cities do I have data of?
+nuts.sf.data %>% as.data.frame() %>%
+  filter(is.na(`2001`) == FALSE) %>%
+  select(CNTR_CODE) %>%
+  table()
+# NO DATA OF: AL, Switzerland/CH, IS, LI, ME, NO, RS, TR
+
+plot(nuts.sf.data["2016"], 
+     xlim = c(0, 20), ylim = c(30, 70))
+
+nuts.sf.data %>% as.data.frame()
+```
+
+
+### Data from Pollution:
+
+```{r}
+
+```
+
+
+### I need to exclude some other zones in the control pool with respect to geographical closeness:
+
+- Those immediatly connected
+- "Urban areas" defined by various Eurostat datasets
+- Levels of nuts regions (2, 1 and 0)
+
+### Get data from SQL
+
+```{r}
+db <- dbConnect(RSQLite::SQLite(), "data/capstonedb")
+dbListTables(db)
+dbListFields(db, "nuts_time")
+data <- dbGetQuery(
+  db, "SELECT nuts_time.geo, nuts3.nuts_name,
+  nuts_time.time, nuts3.min_year_gz,
+  gdp_eur_hab, 
+  pop_km2, gva_A, gva_B_E, gva_F, gva_G_I, gva_J, gva_K, gva_L,
+  gva_M_N, gva_O_U,
+  nuts3.appl_gz, nuts3.appl_uar
+  FROM nuts_time
+           JOIN nuts3 ON nuts_time.geo = nuts3.geo")
+
+data %>% head()
+# Note: I am getting only NUTS3 because one of tha tables has only NUTS3 (i think)
+
+# Note: There is some problem with the names that have "???". Not sure why this is the reason.
+```
+
+
+
+## Start of the model:
+
+packages: 
+* synth - synthetic control method (SCM)
+* gsynth - generalized SCM http://yiqingxu.org/software/gsynth/gsynth_examples.html (VERY USEFULL + paper + useful lectues on Synthetic control methods)
+* tjbal - trajectoy balancing
+* panelView - visualizing panel data
+review of methodologies: https://www.nber.org/papers/w22791
+
+```{r}
+# install.packages('panelView') 
+
+library(panelView)
+data(panelView)
+turnout
+
+panelView(turnout ~ policy_edr + policy_mail_in + policy_motor, 
+          data = turnout, 
+          index = c("abb","year"), xlab = "Year", ylab = "State")
+
+
+# Simplificación burda de que si se aplicó ese año se aplicó e todo el año
+data_synth <- data %>%
+  mutate(treat_gz = ifelse((time < min_year_gz | is.na(min_year_gz)),
+                          yes = 0, 
+                          no = appl_gz)) 
+# # test
+# data_synth %>%
+#   filter(appl_gz == 1)
+
+# Create a relative increase in gdp_hab
+data_synth <- data_synth %>%
+  group_by(geo) %>%
+  dplyr::mutate(gdp_eur_hab_norm = gdp_eur_hab/first(gdp_eur_hab))
+
+# NOTE: I am deleating some observations because they had missing values!
+# I need to review this is not changing the results!
+
+data_synth_c <- data_synth %>%
+  filter(time < 2017, # Delete 2017 that has too many missing
+         !is.na(gdp_eur_hab)) %>% # Delete those with NA
+  group_by(geo) %>% # Delete those that do not have the whole period
+  dplyr::mutate(na_in_geo = ifelse(n() == 17, FALSE, TRUE)) %>%
+  filter(na_in_geo == FALSE) %>% select(-na_in_geo) %>%
+  filter(!(appl_gz == 0 & appl_uar == 1)) # Delete suspicious controls
+
+# data_synth_c$na_in_geo%>% table()
+
+colSums(is.na(data_synth_c))
+
+data %>% names()
+panelView(gdp_eur_hab_norm ~ treat_gz, data = data_synth_c, 
+          index = c("geo","time"), xlab = "Year", ylab = "Geo",
+          by.timing = TRUE, 
+          axis.adjust = TRUE,
+          gridOff = TRUE)
+
+# panelView(gdp_eur_hab_norm ~ appl_gz, data = data_synth, 
+#           index = c("geo","time"), xlab = "Year", ylab = "State",
+#           # by.group = TRUE, 
+#           axis.adjust = TRUE,
+#           type = "outcome")
+data_synth_c
+  
+```
+
+
+
+# Synthetic control method:
+
+```{r}
+# install.packages("Synth")
+library(Synth)
+data(basque)
+?basque
+basque
+?Synth::dataprep()
+# Synth::dataprep(foo = nuts_try, 
+#                 predictors = values, # This is wrong
+#                 dependent = values,
+#                 unit.variable = NUTS_ID,
+#                 time.variable = time,
+#                 treatment.identifier = "HR043",
+#                 )
+nuts_try
+```
+
+http://yiqingxu.org/teaching/17802/synth.pdf
+https://www.stata.com/meeting/uk17/slides/uk17_Cerulli.pdf
+https://blogs.worldbank.org/impactevaluations/evaluating-regulatory-reforms-using-the-synthetic-control-method
+https://jech.bmj.com/content/72/8/673
+
+
+
+# Generalized Synthetic control method:
+
+```{r}
+# install.packages('gsynth', type = 'source')
+library(gsynth)
+# ?gsynth
+data(gsynth)
+# turnout
+# simdata
+
+out <- gsynth(Y ~ D + X1 + X2, data = simdata, 
+              index = c("id","time"), 
+              force = "two-way", CV = TRUE, 
+              r = c(0, 5), se = TRUE, 
+              inference = "parametric", nboots = 1000, 
+              parallel = FALSE)
+
+out2 <- gsynth(gdp_eur_hab ~ treat_gz, 
+              data = data_synth_c, 
+              index = c("geo","time"), 
+              force = "two-way", CV = TRUE, 
+              r = c(0, 4), # an integer specifying the number of factors. If CV = TRUE, the cross validation procedure will select the optimal number of factors from r to 5.
+              se = TRUE, 
+              # EM = TRUE, # Gobillon and Magnac (takes a lot of time)
+              inference = "parametric", nboots = 1000, 
+              parallel = FALSE,
+              min.T0 = 6) # Has to be larger than r.max+1
+
+# Idea: include countries/NUTS 2 regions and others as FE to control for heterogeneity?
+
+# NOTE: I need to correct from assigning treatment by a point to assygn treatment by the area. If not, some NUTS3 in Paris and London will be counted as controls! 
+# They should eather be treated or cease to be controls [ ]
+# !!!
+
+?gsynth
+
+out2 %>% print()
+out2$est.att
+out2$est.avg
+out2$est.beta
+out2$Y.ct %>% as.data.frame() # pred counterfactuals for the treated units.
+out2$Y.co %>% as.data.frame()
+out2$eff %>% as.data.frame()  # Y - predicted Y(0);
+out2$eff.cnt %>% as.data.frame() # Y - predicted Y(0); rearranged based on the timing of the treatment.
+
+# Inspect results, how are the estimated tratement effects for all treated?
+
+out2$eff.cnt %>% as.data.frame() %>% # Y - predicted Y(0);
+  rownames_to_column(var = "year") %>% 
+  mutate(year = as.numeric(year)) %>%
+  pivot_longer(-year, names_to = "geo", 
+               values_to = "y_minus_y0") -> all_treat_effects
+
+all_treat_effects %>%
+  ggplot(aes(x = year, y = y_minus_y0)) +
+  geom_line( aes(colour = geo)) +
+  theme(legend.position = "none")
+# Note: I need to see if this continues to happen for random pacebo treatments 
+
+```
+
+
+```{r}
+# out2$est.co$residuals %>% as.data.frame()
+# plot(out2, ylim = c(-0.4, 0.02))
+plot(out2, ylim = c(-5000, 1000))
+
+plot(out2, type = "counterfactual", 
+     raw = "all", main="") # Why the final dip?
+
+plot(out2, type = "counterfactual", 
+     raw = "none", main="") # Why the final dip?
+
+plot(out2, type = "counterfactual", id = "UKF14") # Nottingham
+plot(out2, type = "counterfactual", id = "FR101") # Paris
+plot(out2, type = "counterfactual", id = "HU110") # Budapest
+plot(out2, type = "counterfactual", id = "DE111") # Stuttgart
+plot(out2, type = "counterfactual", id = "DE212") #	München
+
+data_synth_c %>%
+  filter(substr(geo, 1, 2) == "DE")
+```
+
+
+## Extras:
+
+### Try to extract kmls (geographies of all LEZ):
+_NOTE_: The files are encrypted, I need to deencrip them before. C#.
+```{r}
+# library(rgdal)
+# belg_ghent = readOGR(dsn = "~/A - Estudios/LSE - Applied Social Data Science/Project/PM2.5/Data Europe/BelgienGent.kmls")
+# ??readOGR
+```
+
+### Good info on spatial analysis:
+
+https://mgimond.github.io/Spatial/uncertainty-in-census-data.html

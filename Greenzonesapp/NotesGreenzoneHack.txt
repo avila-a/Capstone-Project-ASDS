@@ -1,0 +1,14 @@
+https://www.green-zones.eu/index.php?id=2744&output=json&signatur=%22%22&lizenz=%22importer67yCfsYzsf2o7Idu%22&contoller=%20StatusApp&erklaerungTyp=basicapp
+
+
+https://www.green-zones.eu/index.php?id=2744&output=json&signatur=%22%22&lizenz=%22importer67yCfsYzsf2o7Idu%22&contoller=%20StatusApp & 
+
+
+Key:
+4b 54 24 2a 34 34 49 46 2e 33 37 38 46 74 46 3b 47 5e 7c 3d 4b 61 78 77 3b 2b 2f 4d 21 21 37 77 38 37 21 27 2f 27 26 3a 5a 5e 4e 3b 2e 48 36 76
+
+
+IV:
+6f 2d 34 7e 2a 21 4d 40
+
+

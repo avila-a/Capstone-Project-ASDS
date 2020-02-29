@@ -14,13 +14,40 @@ library(tidyverse)
 library(plyr)
 ```
 
-Download
+### Download
+
+_TO DO:_
+
+* Review the temporal and geographical reach of each variable of interest for the analysis.
+* Look if lower definitions could help fill up some gaps in a NUTS 3 definition grid.
+
 
 ```{r}
 # http://ropengov.github.io/eurostat/articles/eurostat_tutorial.html
-search <- search_eurostat("by NUTS 3")
+search <- search_eurostat("NUTS 3")
+# ?search_eurostat
+# search <- rbind(search, search_eurostat("Investment"))
 search
 ```
+
+Investment: 
+- Gross fixed capital formation by NUTS 2 regions nama_10r_2gfcf
+ 
+```{r}
+# down_eurostat("edat_lfse_12") -> data_experiment
+# data_experiment %>% summary()
+```
+
+<!--NOTE: 
+- Crimes recorded by the police by NUTS 3 regions 
+- Income of households by NUTS 2 regions 
+- Employment in technology and knowledge-intensive sectors by NUTS 2 regions and sex (1994-2008, NACE Rev. 1.1)	
+- Employment in technology and knowledge-intensive sectors by NUTS 2 regions and sex (from 2008 onwards, NACE Rev. 2)	
+- Number of local units, persons employed and wages and salaries by NUTS 2 regions	
+- Causes of death - crude death rate by NUTS 2 region of residence
+- Income of households by NUTS 2 regions
+- Unemployment by sex, age, country of birth and NUTS 2 regions
+-->
 
 ```{r}
 filter_nuts <- function(data, nuts) {
@@ -31,61 +58,617 @@ filter_nuts <- function(data, nuts) {
   return(result)
 }
 
-list_euro_data <- c("nama_10r_3gdp", "nama_10r_3gva")
+eurostat_geodata_60_2016 %>% head
+
+# Get the total number of regions per conutry and level of NUTS:
+tot_number <- eurostat_geodata_60_2016 %>% as.data.frame() %>%
+  dplyr::group_by(CNTR_CODE, LEVL_CODE) %>%
+  dplyr::summarise(tot_nuts = n())
+tot_number
+```
+
+### Create formulas for analysis and understand the data's limitations:
+
+```{r}
+# An example dataset:
+gdp_example <- get_eurostat("nama_10r_3gdp",
+  time_format = "num")
+
+# Filter all other indicators such as "milion units of national currenct or EU %.
+gdp_example <- gdp_example %>%
+  filter((unit %in% c("MIO_EUR", "EUR_HAB", "MIO_PPS")))
+
+# Calculate the number of regions included in the database per ...
+count_gdp <- gdp_example %>%
+  mutate(geo_char = as.character(geo)) %>%
+  mutate(LEVL_CODE = case_when(
+    nchar(geo_char) == 3 + 2 ~ 3,
+    nchar(geo_char) == 2 + 2 ~ 2, # France has some extra territorial "colonies", I should look if those (with letters) have a different tratment
+    nchar(geo_char) == 1 + 2 ~ 1,
+    nchar(geo_char) == 0 + 2 ~ 0,
+  ),
+  CNTR_CODE = substr(geo_char, 1, 2)) %>% # Get the country code
+  filter(substr(geo_char, 3, 3) != "Z") %>% # Avoid the "Extra regions"
+  select(-geo_char) %>%
+  right_join(tot_number) %>%
+  dplyr::group_by(CNTR_CODE, LEVL_CODE, time, unit) %>%
+  dplyr::summarise(n_nuts = n(),
+                   tot_nuts = max(tot_nuts)) %>%
+  mutate(prop = ifelse(is.na(n_nuts), 0, n_nuts/tot_nuts))
+
+count_gdp %>% head()
+
+plot(count_gdp$prop, col = factor(count_gdp$CNTR_CODE)) # Algo estoy haciendo mal al contar o en los datos que le doy al contador.
+
+
+# Min and max dates per country 
+count_gdp %>%
+  dplyr::group_by(CNTR_CODE) %>%
+  dplyr::summarise(
+            time_min = first(time),
+            time_max = last(time),
+            tot_nuts = max(tot_nuts)
+            ) %>%
+  arrange(desc(tot_nuts))
+
+
+# count_gdp %>% 
+#   filter(CNTR_CODE == "FR")
+# 
+# gdp %>% head()
+
+# Function to know data disponibility of Eurostat tables:
+s_t_eurostat <- function(data){
+  data %>%
+    mutate(geo_char = as.character(geo)) %>%
+    mutate(LEVL_CODE = case_when(
+      nchar(geo_char) == 3 + 2 ~ 3,
+      nchar(geo_char) == 2 + 2 ~ 2, 
+      nchar(geo_char) == 1 + 2 ~ 1,
+      nchar(geo_char) == 0 + 2 ~ 0,
+    ),
+    CNTR_CODE = substr(geo_char, 1, 2)) %>%
+    dplyr::group_by(CNTR_CODE) %>%
+    dplyr::summarise(
+      time_min = last(time),
+      time_max = first(time),
+      n_obs = n()
+    ) %>%
+    arrange(time_min, desc(n_obs))
+}
+
+# Function that saves, filters for NUTS 3, and analyses the Eurostat database
+down_eurostat <- function(eurostat_str){
+  name_df <- get_eurostat(eurostat_str,
+                           time_format = "num")
+  name_df %>% head() %>% print()
+  s_t_eurostat(name_df) %>% print()
+  # name_df <- filter_nuts(name_df, 3)
+  return(name_df)
+}
+
+# list_euro_data <- c("nama_10r_3gdp", "nama_10r_3gva")
 ```
 
 
+Note: 
+
+* It would be good to review the reason of the 7-10 deviations we see on the graph.
+
+* data has some "extra regions NUTS X{1,2,3}" in some countries and one for NUTS level. I am not sure what do they count but have as third, fourth and 5th letter a Z instead of a number.
+
+* All NUTS regions of the same country start the same year, but some "NUTS 2 or 1" have data from 2017 while other NUTS3 have only until 2016
+
+* France and Poland are the biggest "holes" in the data.
+
+Get the GDP
+
 ```{r}
-gdp <- get_eurostat("nama_10r_3gdp",
-  time_format = "num")
-
-gdp <- filter_nuts(gdp, 3)
-
-# Filter all other indicators such as "milion units of national currenct or EU %.
-gdp <- gdp %>%
+# Gross domestic product (GDP) at current market prices by NUTS 3 regions
+down_eurostat("nama_10r_3gdp") -> e_gdp
+e_gdp <- e_gdp %>%
   filter((unit %in% c("MIO_EUR", "EUR_HAB", "MIO_PPS")))
 
 
-gdp$unit %>% table()
-gdp %>% head()
+# Filter all other indicators such as "milion units of national currenct or EU %.
+e_gdp$unit %>% table()
+e_gdp %>% filter(unit == "EUR_HAB", geo == "FR101")
+# Note: We have only data until 2016 for france!
+e_gdp %>% head()
+
+# write.csv(gdp, file = "eurostat_gdp.csv")
+
+# Gross value added at basic prices by NUTS 3 regions
+down_eurostat("nama_10r_3gva") -> e_gva
+e_gva <- e_gva %>%
+  filter(currency == "MIO_EUR")
+
+# Note: We have only data until 2016 for france!
+e_gva %>% filter(nace_r2 == "J", geo == "FR101")
+
+write.csv(e_gva, file = "data/eurostat_gva.csv")
+```
+
+
+Dechelepètre deflates gdp using country-level Eurostat GDP deflator 
+
+> Regional accounts according to ESA2010 is available as from the reference year 2000 with a few exceptions. Countries that were affected by changes in the NUTS 2016 classification are only legally obliged to provide data in NUTS 2016 for the most recent year, historical series can be reported until December 2019. This particularly affects *Poland, France and Lithuania*. Historical series for the Netherlands are also missing due to a benchmark revision to their National Accounts.
+
+Note: I need to find the old data. France nuts 3 has NOT changed, Poland has changed and Lithuania (i don't know)
+
+
+Get Employment
+
+```{r}
+# Employment (thousand persons) by NUTS 3 regions
+down_eurostat("nama_10r_3empers") -> e_emp
+
+# emp <- filter_nuts(employment, 3)
+e_emp$geo %>% unique() %>% length()
+
+# # Change values for NACE activities
+# e_emp <- e_emp %>%
+#   mutate(nace = revalue(nace_r2,
+#     c("A" = "Agriculture, forestry and fishing",
+#       "B-E" = "Industry (except construction)",
+#       "C" = "Manufacturing",
+#       "F" = "Construction",
+#       "G-J" = "Wholesale and retail trade; transport; accommodation and food service activities; information and communication",
+#       "G-I" = "Wholesale and retail trade, transport, accommodation and food service activities",
+#       "J" = "Information and communication",
+#       "K-N" = "Financial and insurance activities; real estate activities; professional, scientific and technical activities; administrative and support service a...",
+#       "K" = "Real estate activities",
+#       "M_N" = "Professional, scientific and technical activities; administrative and support service activities",
+#       "O-U" = "Public administration and defence; compulsory social security; education; human health and social work activities; arts, entertainment and recreati...",
+#       "O-Q" = "Public administration, defence, education, human health and social work activities",
+#       "R-U" = "Arts, entertainment and recreation; other service activities; activities of household and extra-territorial organizations and bodies")))
+
+# e_emp <- e_emp %>%
+#   mutate(
+#     wstatus = revalue(
+#       wstatus, 
+#       c("EMP" = "Employed persons", # Person 15y+ (or 16y+ in Iceland and Norway) who during the reference week performed +1h of work for pay, profit or family gain.
+#         "SAL" = "Employees"))) # Person with contract to work for employer and receives compensation
+
+head(e_emp)
+summary(e_emp)
+colSums(is.na(e_emp))
+
+write.csv(e_emp, file = "data/eurostat_employment.csv")
+
+## Also data of labor market by city (with missing data) (see also "urb_clma")
+# https://appsso.eurostat.ec.europa.eu/nui/show.do?dataset=urb_llma&lang=en
+```
+
+* Look at unemployment statistscs (and others) of "cities" as here: https://ec.europa.eu/eurostat/cache/RCI/#?vis=city.statistics&lang=en
+https://ec.europa.eu/eurostat/web/cities/data/database
+* I would like to know the geografical definition of the city that builds these statistics. Is it the LAU definition? The functional urban areas?
+
+## GDP, GVA and employment for France, Poland, and others who did not had it:
+
+```{r}
+# Test that we have low observations for france and poland
+e_gdp %>%
+  mutate(CNTR_CODE = substr(geo, 1, 2) %>% as.factor()) %>%
+  select(CNTR_CODE) %>% table()
+
+e_gva %>%
+  mutate(CNTR_CODE = substr(geo, 1, 2) %>% as.factor()) %>%
+  select(CNTR_CODE) %>% table()
+
+e_emp %>%
+  mutate(CNTR_CODE = substr(geo, 1, 2) %>% as.factor()) %>%
+  select(CNTR_CODE) %>% table()
+```
+
+1. Get the old data:
+
+```{r}
+# Get them:
+
+old_gdp <- read_delim("data/refin.nama_10r_3gdp.dat",
+                      "\t", 
+                      trim_ws = TRUE,
+                      col_types = cols(obs_decimals = col_skip(), 
+                                       obs_status = col_skip())) 
+
+old_gva <- read_delim("data/refin.nama_10r_3gva.dat",
+                      "\t", 
+                      trim_ws = TRUE, # trim whitespace
+                      col_types = cols(obs_decimals = col_skip(), 
+                                       obs_status = col_skip()))
+
+old_emp <- read_delim("data/refin.nama_10r_3empers.dat",
+                      "\t", 
+                      trim_ws = TRUE, # trim whitespace
+                      col_types = cols(obs_decimals = col_skip(), 
+                                       obs_status = col_skip()))
+
+old_emp %>% head()
+old_emp$wstatus %>% table
+```
+
+2. filter and review it is complete:
+
+```{r}
+old_gdp <- old_gdp %>%
+  mutate(CNTR_CODE = substr(geo, 1, 2) %>% as.factor()) %>%
+  #filter_nuts(3) %>%
+  filter((unit %in% c("MIO_EUR", "EUR_HAB", "MIO_PPS")))
+
+old_gva <- old_gva %>%
+  mutate(CNTR_CODE = substr(geo, 1, 2) %>% as.factor()) %>%
+  #filter_nuts(3) %>%
+  filter(currency == "MIO_EUR")  %>% # Delete MIO_NAC entries
+  select(-currency) 
+
+old_emp <- old_emp %>%
+  mutate(CNTR_CODE = substr(geo, 1, 2) %>% as.factor()) %>%
+  #filter_nuts(3) %>%
+  select(-unit)
+
+# Review we have the data:
+table((old_gdp %>% dplyr::filter(CNTR_CODE == "PL"))$time) # %>% plot(type = 'l')
+table((old_gva %>% dplyr::filter(CNTR_CODE == "FR"))$time) # %>% plot(type = 'l')
+table((old_emp %>% dplyr::filter(CNTR_CODE == "FR"))$time) # %>% plot(type = 'l')
 ```
 
 
 ```{r}
-employment <- get_eurostat("nama_10r_3empers",
-  time_format = "num")
+# Include it in the big table:
 
-emp <- filter_nuts(employment, 3)
+# old_gdp %>%
+#   filter(CNTR_CODE %in% c("PL")) %>%
+#   filter(time == 2015) -> pre_change
+# 
+# old_gdp %>%
+#   filter(CNTR_CODE %in% c("PL")) %>%
+#   select(geo) %>%
+#   unique() %>%
+#   nrow()
+# 
+# e_gdp %>%
+#   mutate(CNTR_CODE = substr(geo, 1, 2) %>% as.factor()) %>%
+#   filter(CNTR_CODE %in% c("PL")) %>%
+#   select(geo) %>%
+#   unique() %>%
+#   nrow()
 
-emp <- emp %>%
-  mutate(nace = revalue(nace_r2,
-    c("A" = "Agriculture, forestry and fishing",
-      "B-E" = "Industry (except construction)",
-      "C" = "Manufacturing",
-      "F" = "Construction",
-      "G-J" = "Wholesale and retail trade; transport; accommodation and food service activities; information and communication",
-      "G-I" = "Wholesale and retail trade, transport, accommodation and food service activities",
-      "J" = "Information and communication",
-      "K-N" = "Financial and insurance activities; real estate activities; professional, scientific and technical activities; administrative and support service a...",
-      "K" = "Real estate activities",
-      "M_N" = "Professional, scientific and technical activities; administrative and support service activities",
-      "O-U" = "Public administration and defence; compulsory social security; education; human health and social work activities; arts, entertainment and recreati...",
-      "O-Q" = "Public administration, defence, education, human health and social work activities",
-      "R-U" = "Arts, entertainment and recreation; other service activities; activities of household and extra-territorial organizations and bodies")))
+# dict_2013_2016 <- readxl::read_excel("~/A - Estudios/LSE_ASDS/Project/PM2.5/NUTS3/NUTS2013-NUTS2016.xlsx",  
+#                              sheet = "Correspondence NUTS-3")
+# 
+# dict_2013_2016_NUTS2 <- readxl::read_excel("~/A - Estudios/LSE_ASDS/Project/PM2.5/NUTS3/NUTS2013-NUTS2016.xlsx",  
+#                              sheet = "Correspondence NUTS-2")
+# 
+# dict_2013_2016_NUTS1 <- readxl::read_excel("~/A - Estudios/LSE_ASDS/Project/PM2.5/NUTS3/NUTS2013-NUTS2016.xlsx",  
+#                              sheet = "Correspondence NUTS-1")
 
-emp <- emp %>%
-  mutate(var = revalue(wstatus, 
-                       c("EMP" = "Employed persons",
-                         "SAL" = "Employees"))) %>%
-  select(-wstatus)
+dict_2013_2016_all <- readxl::read_excel("~/A - Estudios/LSE_ASDS/Project/PM2.5/NUTS3/NUTS2013-NUTS2016.xlsx",  
+                             sheet = "NUTS2013-NUTS2016", skip = 1)
 
-head(emp)
-summary(emp)
-colSums(is.na(emp))
+# THIS IS ALSO EXCLUDING SOME (VERY FIEW) ZONES WHERE IT IS POSSIBLE TO ASSIGN VALUES (LOOK AT `COMPATIBLE` COLLUMN)
+
+dict_2013_2016_all <- dict_2013_2016_all %>%
+  select(c("Code 2013", "Code 2016", "Change"))  %>%
+  filter(Change == "recoded") %>% # Only those "recoded" (only changes of names)
+  select(`Code 2013`, `Code 2016`) # I only need the dict of codes
+
+
+old_gdp_new_codes <- dict_2013_2016_all %>%
+  right_join(old_gdp, by = c("Code 2013" = "geo")) %>%  #
+  mutate(geo = ifelse(test = is.na(`Code 2016`), # have the "latest geo" code
+                      yes = `Code 2013`, 
+                      no = `Code 2016`))  # %>%  filter(`Code 2013` == "FR241") 
+
+old_gva_new_codes <- dict_2013_2016_all %>%
+  right_join(old_gva, by = c("Code 2013" = "geo")) %>%  #
+  mutate(geo = ifelse(test = is.na(`Code 2016`), # have the "latest geo" code
+                      yes = `Code 2013`, 
+                      no = `Code 2016`))  
+
+old_emp_new_codes <- dict_2013_2016_all %>%
+  right_join(old_emp, by = c("Code 2013" = "geo")) %>%  #
+  mutate(geo = ifelse(test = is.na(`Code 2016`), # have the "latest geo" code
+                      yes = `Code 2013`, 
+                      no = `Code 2016`)) 
+# test:
+# old_emp_new_codes %>% filter(`Code 2013` == "FR241") %>% head()
+```
+
+Tests and ideas on how the changes in NUTS 3 regions affect the statistics of GDP:
+
+```{r}
+# EXAMPLE BOUNDARY SHIFT: ¿IS a good idea to include also territories that have "small" bounday shifts?
+
+# I have to decide if I exclude from the dataset the NUTS that have had bounday shifts but that Eurostat has a continuous series for them. I don't know if they ar OK or not.
+# -->  Look if they have the same data (Look at Belfast, that has a boundary change)):
+
+old_gdp %>% filter(geo == "UKN01", # Old belfast
+                   unit == "MIO_EUR") %>%
+  select(unit, geo, time, obs_value) %>%
+  left_join(y = e_gdp %>% filter(geo == "UKN06", # New belfast
+                   unit == "MIO_EUR"), by = "time")
+
+# Note: There are BIG disparities between both statistics even if the territory of the NUTS 3 increases just a bit. 
+# Conclusion: I would not include it if there was no previous data. Given is Eurostat who is "creating" the previous data I feel confident about it.
+
+# EXAMPLE SIMPLE REDIFINITION OF NAME:
+# Look if France 2015 in old data is the same as 2015 in new data:
+
+old_gdp %>% filter(geo == "FR711", # Old Ain
+                   unit == "MIO_EUR") %>%
+  select(unit, geo, time, obs_value) %>%
+  full_join(y = e_gdp %>% filter(geo == "FRK21", # New Ain (France)
+                   unit == "MIO_EUR"), by = "time")
+
+# Note: Values for 2015 are between a 3-5% change (a 3-5% increase in GDP that is not justified!) and I only get 1 year more of data. Does the same happens with Paris?
+
+old_gdp %>% filter(geo == "FR101", # Old Paris
+                   unit == "MIO_EUR") %>%
+  select(unit, geo, time, obs_value) %>%
+  full_join(y = e_gdp %>% filter(geo == "FR101", # New Paris (France)
+                   unit == "MIO_EUR"), by = "time")
+
+# The `unjustified` growth of Paris is of a 0.15%
+100*(212410.4-212091)/212091
+
+# Differences all arround (for MIO_EUR)
+old_gdp %>% filter(unit == "MIO_EUR") %>%
+  select(unit, geo, time, obs_value) %>%
+  full_join(y = e_gdp %>% filter(unit == "MIO_EUR"), by = c("geo", "time")) %>%
+  mutate(increase = 100*(values-obs_value)/obs_value) -> test_change
+
+mean(test_change$increase, na.rm = TRUE)
+hist(test_change$increase, breaks = 50, xlim = c(-10, 10))
+# Note: there are some very big changes, should I discard them from the data?
 ```
 
 
+Join France and Poland 2000-2014 for now (other ountries can wait)
+I AM ONLY JOINING FRANCE AND POLAND? - I think I am joining all of it.
+
 ```{r}
+# GDP
+old_gdp_new_codes %>%
+  #filter(time < 2015) %>% # Exclude 2015
+  full_join(e_gdp) %>%  #filter(geo == "FRK21", unit == "MIO_EUR")  %>% # New Ain (France, example)
+  mutate(values = ifelse(test = is.na(values), 
+                         yes = obs_value, 
+                         no = values),
+         CNTR_CODE = substr(geo, 1, 2)) %>%
+  select(unit, time, geo, values, CNTR_CODE) -> e_gdp_complete
+
+# GVA
+old_gva_new_codes %>%
+  #filter(time < 2015) %>% # Exclude 2015
+  full_join(e_gva) %>%  # filter(geo == "FRK21", nace_r2 == "J") # %>% # New Ain (France, example)
+  mutate(values = ifelse(test = is.na(values), # If there is no "new data"
+                         yes = obs_value, # Take old data
+                         no = values),
+         CNTR_CODE = substr(geo, 1, 2)) %>%
+  select(nace_r2, time, geo, values, CNTR_CODE) -> e_gva_complete
+
+# EMP employment
+old_emp_new_codes %>%
+  #filter(time < 2015) %>% # Exclude 2015
+  full_join(e_emp) %>% # filter(geo == "FRK21", nace_r2 == "J") # %>% # New Ain (France, example)
+  mutate(values = ifelse(test = is.na(values), # If there is no "new data"
+                         yes = obs_value, # Take old data
+                         no = values),
+         CNTR_CODE = substr(geo, 1, 2)) %>%
+  select(wstatus, nace_r2, time, geo, values, CNTR_CODE) -> e_emp_complete
+
+
+# Review I now have data for all the years (yes!)
+e_gdp_complete %>%
+  dplyr::group_by(as.character(CNTR_CODE)) %>%
+  arrange(desc(time)) %>%
+  dplyr::summarise(
+    time_min = last(time),
+    time_max = first(time),
+    n_obs = n()
+  ) %>%
+  arrange(time_min, desc(n_obs))
+
+e_emp_complete %>%
+  dplyr::group_by(as.character(CNTR_CODE)) %>%
+  arrange(desc(time)) %>%
+  dplyr::summarise(
+    time_min = last(time),
+    time_max = first(time),
+    n_obs = n()
+  ) %>%
+  arrange(time_min, desc(n_obs))
+
+write.csv(e_gdp_complete, file = "data/eurostat_gdp_complete.csv")
+write.csv(e_gva_complete, file = "data/eurostat_gva_complete.csv")
+write.csv(e_emp_complete, file = "data/eurostat_emp_complete.csv")
+## France -> No NUTS 3 problems (¿)
+## Poland -> Review NUTS 3 changes
+
+e_gdp_complete %>% head()
+```
+
+```{r}
+# [ ] Review if I am including cases with boundary shifts such as Belfast
+# -> Yes but they seem to have solved (or predicted) the issue and have data corresponding to the new geography:
+
+# e_gdp_complete %>%
+#   filter(geo == "UKN06", unit == "MIO_EUR")
+```
+
+
+NUTS 1 (Region) GDP data for france is Here: France: PIBR (regional PIB piblished by INSEE) 
+* https://www.insee.fr/fr/statistiques/1893220 (new and old regions. Maybe I can lay with those to create a "finer" grain of definition?)
+* https://statistiques-locales.insee.fr/#c=indicator&i=tcr062.pib_brut&i2=tcr062.pib_hab&s=2015&s2=2015&view=map3 (all NUTS 1 statistics)
+
+* https://statistiques-locales.insee.fr/#c=zonage (all regions and dub-divisions of france)
+France has some extra territorial "colonies", I should look if those (with letters) have a different tratment
+
+Comune (municipality, smaller to nuts 3) -->  https://www.insee.fr/fr/recherche/recherche-statistiques?q=produits+interieurs&taille=100&debut=0&idprec=1893206&theme=27&categorie=1&geo=TOUTES_COMMUNE-1 
+* Jobs by sector (only 1982, 1990, 1999, 2006, 2011, 2016)
+* Jobs by type of sector (same years)
+
+
+
+Science and tech Statistics:
+
+```{r}
+# Patent applications to the EPO by priority year by NUTS 3 regions	- pat_ep_rtot 
+# Patent applications to the EPO by priority year by NUTS 3 regions, international patent classification (IPC) sections and classes	 - pat_ep_rtec
+# High-tech patent applications to the EPO by priority year by NUTS 3 regions	
+# European Union trade mark (EUTM) applications by NUTS 3 regions	- ipr_ta_reg
+
+
+down_eurostat("ipr_da_reg") -> cd_appl
+write.csv(cd_appl, file = "data/eurostat_cd_appl.csv")
+
+### 
+down_eurostat("pat_ep_rtot")  -> e_patent_epo
+table(e_patent_epo$unit)
+write.csv(e_patent_epo, file = "data/eurostat_patent_epo.csv")
+```
+
+Demografic Statistics:
+
+
+<!-- nama_10r_3popgdp total average pop to calculate gdp -->
+demo_r_d3area area
+<!-- demo_r_pjangrp3 pop by age group -->
+<!-- demo_r_pjanaggr3 pop by broad age group -->
+<!-- cens_01rews pop by age, sex and educational attainment level -->
+
+```{r}
+#  total average pop to calculate gdp (INCOMPLETE FRANCE AND OTHERS)
+down_eurostat("nama_10r_3popgdp")  -> e_pop_gdp
+write.csv(e_pop_gdp, file = "data/eurostat_pop_gdp.csv")
+
+
+down_eurostat("demo_r_births")  -> e_births
+write.csv(e_births, file = "data/eurostat_births.csv")
+
+down_eurostat("demo_r_find3")  -> e_fert
+table(e_fert$indic_de)
+write.csv(e_fert, file = "data/eurostat_fert.csv")
+
+down_eurostat("demo_r_deaths")  -> e_deaths
+write.csv(e_deaths, file = "data/eurostat_deaths.csv")
+
+# Population: Structure indicators by NUTS 3 region
+# ONLY FROM 2014!
+down_eurostat("demo_r_pjanind3") -> e_pop_ind
+table(e_pop_ind$indic_de)
+write.csv(e_pop_ind, file = "data/eurostat_pop_ind_2014.csv")
+
+# demo_r_pjangrp3 pop by age group
+down_eurostat("demo_r_pjangrp3") -> e_pop_age
+e_pop_age$age %>% table()
+write.csv(e_pop_age, file = "data/eurostat_pop_age_2014.csv")
+
+# demo_r_pjanaggr3 pop by broad age group
+down_eurostat("demo_r_pjanaggr3") -> e_pop_age_aggr
+e_pop_age_aggr$age %>% table()
+write.csv(e_pop_age_aggr, file = "data/eurostat_pop_age_aggr.csv")
+
+# Dependency ratio
+# "https://urban.jrc.ec.europa.eu/#/en/download"
+
+# Population by single year of age and NUTS 3 region (only 2001 and 2011)	
+## This should be already included in the dependenct ratio from demo_r_pjanind3.
+# down_eurostat("cens_11ag_r3") -> e_pop_age_11
+
+down_eurostat("cens_01rapop") -> e_pop_age_01
+write.csv(e_pop_age_01, file = "data/eurostat_cens_01rapop.csv")
+
+# demo_r_d3dens density
+down_eurostat("demo_r_d3dens") -> e_pop_dens
+e_pop_dens %>% head()
+write.csv(e_pop_dens, file = "data/eurostat_dens.csv")
+```
+
+### Education:
+
+```{r}
+# cens_01rews pop by age, sex and educational attainment level ONLY 2001
+down_eurostat("cens_01rews") -> e_pop_educ_2001
+e_pop_educ_2001$isced97 %>% table()
+write.csv(e_pop_educ_2001, file = "data/eurostat_pop_educ_2001.csv")
+
+#- Pop aged 25-64 by educ level, sex and NUTS 2 regions (%)	- edat_lfse_04
+#- Pop aged 30-34 by educ level, sex and NUTS 2 regions (%) - edat_lfse_12
+down_eurostat("edat_lfse_04") -> e_pop_educ_nuts2
+rbind(e_pop_educ_nuts2, 
+      down_eurostat("edat_lfse_12")) -> e_pop_educ_nuts2
+summary(e_pop_educ_nuts2)
+write.csv(e_pop_educ_nuts2, file = "data/eurostat_pop_educ_NUTS2.csv")
+
+# https://appsso.eurostat.ec.europa.eu/nui/show.do?dataset=urb_ceduc&lang=en
+get_eurostat("urb_ceduc") -> e_urb_ceduc 
+e_urb_ceduc$indic_ur %>% table()
+# With missing data
+
+# https://appsso.eurostat.ec.europa.eu/nui/show.do?dataset=urb_leduc&lang=en
+get_eurostat("urb_leduc") -> e_urb_leduc 
+
+e_urb_leduc <- e_urb_leduc %>% 
+  filter(indic_ur %in% c("TE2025V", "TE2028V", "TE2031V"))
+# With missing data
+
+```
+_Note_:It is possible to have the GEOSTAT population grid from 2006 and 2011.
+
+
+
+Business Demography:
+
+```{r}
+# Business demography and high growth enterprise by NACE Rev. 2 and NUTS 3 regions		
+
+down_eurostat("bd_hgnace2_r3") -> e_bd_growth_nace
+write.csv(e_bd_growth_nace, "data/eurostat_bd_growth_nace_2008.csv")
+# Business demography by size class and NUTS 3 regions	bd_size_r3	
+
+down_eurostat("bd_size_r3") -> e_bd_growth_size
+write.csv(e_bd_growth_size, "data/eurostat_bd_growth_size_2008.csv")
+
+# Employer business demography by NACE Rev. 2 and NUTS 3 regions	
+
+down_eurostat("bd_enace2_r3") -> e_bd_employer_nace_2008
+write.csv(e_bd_employer_nace_2008,
+          "data/eurostat_bd_employer_nace_2008.csv")
+
+# Employer business demography by size class and NUTS 3 regions	bd_esize_r3	
+
+down_eurostat("bd_esize_r3") -> e_bd_employer_size_2008
+write.csv(e_bd_employer_size_2008,
+          "data/eurostat_bd_employer_size_2008.csv")
+
+```
+
+### Envirnonment:
+
+```{r}
+# https://appsso.eurostat.ec.europa.eu/nui/show.do?dataset=urb_ceduc&lang=en
+get_eurostat("urb_cenv") -> urb_cenv 
+urb_cenv <- urb_cenv %>%
+  filter(indic_ur %in% c("EN2027V", "EN2026V")) # Average P10 and NO2 yearly
+urb_cenv
+# With missing data
+```
+
+
+Other statistics from eurostat:
+
+```{r}
+# Crimes recorded by the police by NUTS 3 regions
+down_eurostat("crim_gen_reg") -> e_crimes
+write.csv(e_crimes, "data/eurostat_crimes_2008.csv")
+```
+
+
+# Try do do it with the API:
+
+```{r}s
 ####
 # url_eurostat <- "http://ec.europa.eu/eurostat/wdds/rest/data/v2.1/json/en/"
 #
@@ -95,7 +678,7 @@ colSums(is.na(emp))
 # raw.employment$status_code
 # raw.employment <- rawToChar(raw.employment$content)
 # list.employment <- fromJSON(raw.employment)
-# str(list.employment)
+# str(list.employment)s
 #
 # employment <- do.call(what = "rbind",
 #                       args = lapply(list.employment, as.data.frame))
@@ -105,5 +688,20 @@ notes:
 
 ```{r}
 plot(eurostat_geodata_60_2016)
+names(eurostat_geodata_60_2016)
+eurostat_geodata_60_2016 %>% head()
 ```
+
+Decheleètre gets OECD mortality, fertility, and migration rates from OECD.
+
+
+Notes:
+
+* New variabels to include: 
+  + Urban area/rural area in NUTS 3 (multiple ways to define)
+  + % of urban area covered by LEZ zone (same, with real shp files or with bounding boxes/elipsis)
+  + Transportation statistics, is this city a transportation hub? Do extra-radial roads exist?
+  + Look data for NUTS 2 too, especially the medical and others https://ec.europa.eu/eurostat/web/regions/data/database
+
+* Decription link: https://www.novixys.com/blog/using-aes-encryption-decryption-python-pycrypto/
 

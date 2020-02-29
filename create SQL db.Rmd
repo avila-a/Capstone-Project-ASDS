@@ -1,0 +1,271 @@
+---
+title: "Create SQL database"
+author: '41783'
+date: "27/02/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(DBI)
+library(rgdal)
+```
+
+```{r}
+# create database
+db <- dbConnect(RSQLite::SQLite(), "data/capstonedb")
+
+```
+
+### Include information on NUTS regions:
+
+```{r}
+nuts.sf <- readOGR("data", "nuts_sf")
+
+nuts.sf@data <- nuts.sf@data %>%
+  mutate(NUTS_NAME = NUTS_NAME %>% as.character(),
+         min_time = as.Date(min_time))
+Encoding(nuts.sf@data$NUTS_NAME) <- "UTF-8"
+
+nuts.sf <- nuts.sf@data
+
+nuts.sf <- nuts.sf %>%
+  dplyr::rename(
+    geo = NUTS_ID,
+    nuts_level = LEVL_CODE,
+    country = CNTR_CODE,
+    nuts_name = NUTS_NAME,
+    min_time_gz = min_time
+  )
+
+nuts.sf %>% head()
+```
+
+
+```{r}
+# Nuts ID 2016 (done)
+# Shapefiles (NOT POSSIBLE)
+
+# Characteristics of nuts3:
+
+# Rural or not?
+
+# Categories of treatment
+## Create a "never treated" and "always treated" variable
+nuts.sf <- nuts.sf %>%
+  mutate(
+    appl_never = ifelse(appl_uar == 0 & appl_gz == 0, 1, 0),
+    appl_sure = appl_uar*appl_gz,
+    min_year_gz = as.character(min_time_gz) %>% 
+           substr(1,4) %>% as.numeric() # year
+  )
+# Write the table:
+nuts.sf %>% head()
+dbWriteTable(db, "nuts3", nuts.sf, overwrite = TRUE)
+dbListFields(db, "nuts3")
+```
+
+## Table of characteristics of NUTS regions by year:
+
+### gdp measures:
+
+```{r}
+# turn into wider
+gdp_complete <- read.csv("data/eurostat_gdp_complete.csv")
+gdp_complete <- gdp_complete %>%
+  select(-c("X")) %>%
+  pivot_wider(id_cols = c("geo", "time"), 
+              names_from = unit, values_from = values)
+
+# Rename variables:
+gdp_complete <- gdp_complete %>%
+  dplyr::rename(
+    gdp_eur_hab = EUR_HAB,
+    gdp_mio_pps = MIO_PPS,
+    gdp_mio_eur = MIO_EUR
+  )
+
+gdp_complete %>% head()
+```
+
+### GVA measures:
+
+```{r}
+gva_incomplete <- read.csv("data/eurostat_gva.csv")
+
+gva_incomplete <- gva_incomplete %>%
+  filter(currency == "MIO_EUR") %>%
+  select(-c("X", "currency")) %>%
+  pivot_wider(id_cols = c("geo", "time"), 
+              names_from = c("nace_r2"),
+              values_from = values)
+
+
+# Change names 
+# (NOTE: there is probably some work in deciding which are relevant or how to unite/divide them)
+gva_incomplete <- gva_incomplete %>%
+  dplyr::rename(
+    gva_A = A,
+    gva_B_E = "B-E",
+    gva_C = C,
+    gva_F = "F",
+    gva_G_I = "G-I",
+    gva_G_J = "G-J",
+    gva_J = "J",
+    gva_K = "K",
+    gva_K_N = "K-N",
+    gva_L = "L",
+    gva_M_N = "M_N",
+    gva_O_Q = "O-Q",
+    gva_O_U = "O-U",
+    gva_R_U = "R-U",
+    gva_tot = "TOTAL"
+  )
+
+gva_incomplete
+```
+
+
+
+### Population age:
+
+```{r}
+# turn into wider
+pop_age_aggr <- read.csv("data/eurostat_pop_age_aggr.csv")
+pop_age_aggr <- pop_age_aggr %>%
+  filter(sex == "T") %>%
+  select(-c("sex", "unit", "X")) %>%
+  pivot_wider(id_cols = c("geo", "time"), 
+              names_from = age, values_from = values)
+
+# modify names:
+pop_age_aggr <- pop_age_aggr %>%
+  dplyr::rename(
+    pop_total = TOTAL,
+    pop_15_64 = "Y15-64",
+    pop_65plus = Y_GE65,
+    pop_less15 = Y_LT15,
+    pop_unk_age = UNK
+  )
+
+pop_age_aggr %>% head()
+```
+
+### Education
+
+```{r}
+# FROM 2001 census:
+pop_educ_2001 <- read.csv("data/eurostat_pop_educ_2001.csv")
+
+# turn into wider
+pop_educ_2001 <- pop_educ_2001 %>%
+  filter(sex == "T", # all sexes, ages, and work statues
+         age == "TOTAL",
+         wstatus == "POP") %>%
+  select(-c("sex", "unit", "X", "age", "wstatus")) %>%
+  pivot_wider(id_cols = c("geo"), 
+              names_from = isced97, values_from = values)
+
+# rename:
+pop_educ_2001 <- pop_educ_2001 %>%
+  dplyr::rename(
+    edu_0_1 = ED0_1,
+    edu_1 = ED1,
+    edu_2 = ED2,
+    edu_3 = ED3,
+    edu_4 = ED4,
+    edu_5_6 = ED5_6,
+    edu_ned = NED,
+    edu_total = ED_NED
+  )
+
+pop_educ_2001 %>% head()
+
+# FROM NUTS2 regions yearly:
+pop_educ_NUTS2 <- read.csv("data/eurostat_pop_educ_NUTS2.csv")
+
+# turn into wider
+pop_educ_NUTS2 <- pop_educ_NUTS2 %>%
+  filter(sex == "T",
+         age == "Y25-64") %>%
+  select(-c("sex", "X", "unit")) %>%
+  pivot_wider(id_cols = c("geo", "time"), 
+              names_from = isced11, values_from = values)
+
+# ED0-2	Less than primary, primary and lower Sec. educ (levels 0-2)
+# ED3-8	Upper Sec., post-Sec. non-tertiary and tertiary educ (levels 3-8)
+# ED3_4	Upper Sec. and post-Sec. non-tertiary educ (levels 3 and 4)
+# ED5-8	Tertiary educ (levels 5-8)
+
+# rename:
+pop_educ_NUTS2 <- pop_educ_NUTS2  %>%
+  dplyr::rename(
+    edu_0_2 = "ED0-2",
+    edu_3_4 = "ED3_4",
+    edu_5_8 = "ED5-8"
+  ) %>%
+  select(-"ED3-8")
+
+pop_educ_NUTS2 %>% head()
+
+# NOTE: I could probably have the NUTS3 definition of 1 or 2 census and then use the NUTS2 to extrapolate the NUTS3 data [ ]
+
+# Look if there is some data on this or investment in the city level.
+```
+
+### Investment:
+
+```{r}
+# Intramural R&D Expenditure by Sector (https://urban.jrc.ec.europa.eu/#/en/download)
+
+# Gross fixed capital formation by NUTS 2 regions nama_10r_2gfcf
+
+```
+
+### Population denisty:
+
+```{r}
+# Density
+pop_dens <- read.csv("data/eurostat_dens.csv")
+
+pop_dens <- pop_dens %>%
+  select(-c("X", "unit")) %>%
+  dplyr::rename(pop_km2 = values)
+
+pop_dens %>% head()
+```
+
+### Business demography (only from 2008):
+
+```{r}
+# Density
+# pop_dens <- read.csv("data/eurostat_bd_employer_nace_2008.csv")
+```
+
+### Pollution
+
+```{r}
+
+```
+
+
+## Unite them on a table by nuts-year:
+
+```{r}
+nuts_time <- gdp_complete %>%
+  left_join(pop_age_aggr) %>%
+  left_join(gva_incomplete) %>%
+  left_join(pop_dens) %>%
+  mutate(geo = as.factor(geo))
+# Education
+# Investment
+# GVA_complete
+# Pollution
+nuts_time %>% head()
+dbWriteTable(db, "nuts_time", value = nuts_time, overwrite = TRUE)
+dbDisconnect(db)
+```
+

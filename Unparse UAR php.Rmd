@@ -1,16 +1,21 @@
 ---
-title: "Unparse UAR php"
+title: "Get data from GZ and UAR and unite the rest:"
 author: "Antonio Avila"
 date: "06/02/2020"
 output: html_document
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
 
 ```{r message=FALSE, warning=FALSE}
 library(jsonlite)
-library(dplyr)
+library(tidyverse)
 library(rvest)
-setwd("~/A - Estudios/LSE - Applied Social Data Science/Project/PM2.5/Data Europe/")
+library("rgdal") # ReadOGR
+# setwd("~/A - Estudios/LSE - Applied Social Data Science/Project/PM2.5/Data Europe/")
 ```
 
 1. Read the data:
@@ -19,7 +24,7 @@ setwd("~/A - Estudios/LSE - Applied Social Data Science/Project/PM2.5/Data Europ
 uar <- read_json(path = "Urb. Access Reg data mapapi.txt", 
                       simplifyVector = TRUE)[[1]]
 # "Low Emission Zone in place since the 1st" (or similar, say the day of the beguinning.)
-uar %>% head()
+uar %>% head(2)
 uar[4:7, 2]
 # I could make a scraper that goes to every page and gets more information.
 
@@ -52,8 +57,8 @@ Read the scheme data
 # This gives me the lists of names and their Ids
 allscheme <- read_json(path = "AllScheme.txt", 
                       simplifyVector = TRUE)[[1]]
-write.csv(x = uar, file = "uar.csv")
-write.csv(x = allscheme, file = "id_name_pairs.csv")
+write.csv(x = uar, file = "UAR_data/uar.csv")
+write.csv(x = allscheme, file = "UAR_data/id_name_pairs.csv")
 ```
 
 
@@ -61,7 +66,8 @@ write.csv(x = allscheme, file = "id_name_pairs.csv")
 
 ```{r}
 library(DBI)
-con <- dbConnect(RSQLite::SQLite(), dbname = "Greenzonesapp/db_greenzones.db")
+con <- dbConnect(RSQLite::SQLite(), 
+                 dbname = "Greenzonesapp/db_greenzones.db")
 
 # Explore:
 dbListTables(con)
@@ -112,10 +118,13 @@ zones %>% head()
 
 # I could get the translation (of countries) in English too
 
+# Hey! If the min and max longitude is faily exact it is a very good proxi for the real shapefile (maybe a circle inside the sqare is a little better)
+
+DBI::dbDisconnect(con)
 ```
 
 
-This was quite nice, if I want to get the geografies and more data I should look at the dll files (for which I need a compiler from Hex)
+This was quite nice, if I want to get the geografies and more data I should look at the dll files (for which I need a compiler from Hex).
 
 ## Objective now: 
 
@@ -127,24 +136,26 @@ Objective:
 (b) from when? (DONE)
 (c) any economical data from Eurostat. (TO DO)
 (d) Look at sources of air pollution (TO DO)
+(e) Look at sources of congestion (TO DO)
 
 
 Use the coordinates to know which NUTS 3 regions are "treated" OR "not in the control" group
 
 ```{r}
-library("rgdal")
 
 # Source: https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/administrative-units-statistical-units/nuts
 # (higher quality available)
-basis <- "~/A - Estudios/LSE - Applied Social Data Science/Project/PM2.5/NUTS3/"
-e2016 <- "ref-nuts-2016-01m/NUTS_RG_01M_2016_4326.shp/"
-e2006 <- "ref-nuts-2006-01m/NUTS_RG_01M_2006_4326.shp/"
+basis <- "~/A - Estudios/LSE_ASDS/Project/PM2.5/NUTS3/"
+e2016 <- "ref-nuts-2016-01m"
+e2006 <- "ref-nuts-2006-01m"
 wd2016 <- paste(basis, e2016, sep = "")
 wd2006 <- paste(basis, e2006, sep = "")
 
-setwd(wd2016)
-shData2016 <- readOGR(".", "NUTS_RG_01M_2016_4326")
-shData2016 <- spTransform(shData2016, CRS("+proj=longlat +datum=WGS84 +no_defs"))
+
+shData2016 <- readOGR(wd2016,
+                      "NUTS_RG_01M_2016_4326")
+shData2016 <- spTransform(shData2016, 
+                          CRS("+proj=longlat +datum=WGS84 +no_defs"))
 
 # class(shData2016)
 
@@ -153,8 +164,9 @@ NUTS2_16 <- shData2016[shData2016$LEVL_CODE == 2, ]
 NUTS3_16 <- shData2016[shData2016$LEVL_CODE == 3, ]
 class(NUTS3_16)
 
-NUTS3_16@data %>%
-  mutate(NUTS_NAME = NUTS_NAME %>% as.character()) -> NUTS3_16@data
+NUTS3_16@data <- NUTS3_16@data %>%
+  mutate(NUTS_NAME = NUTS_NAME %>% as.character())
+
 Encoding(NUTS3_16@data$NUTS_NAME) <- "UTF-8"
 
 NUTS3_16@data %>% head()
@@ -171,14 +183,17 @@ uar_sp <- SpatialPointsDataFrame(
 
 # uar$points <- SpatialPoints(cbind(uar$city_latitude, uar$city_longitude))
 proj4string(uar_sp) <- CRS("+proj=longlat +datum=WGS84 +no_defs")
-NUTS3_16 <- spTransform(NUTS3_16, CRS("+proj=longlat +datum=WGS84 +no_defs"))
 
+# NUTS3_16 <- spTransform(NUTS3_16, 
+                        # CRS("+proj=longlat +datum=WGS84 +no_defs"))
 
 ## From GreenZones:
 gzones_sp <- SpatialPointsDataFrame(
   coords = cbind(zones$lon, zones$lat),
   data = zones
 )
+
+gzones_sp@coords[155,] <- c(18.0280074, 59.3359563)
 proj4string(gzones_sp) <- CRS("+proj=longlat +datum=WGS84 +no_defs")
 
 
@@ -192,8 +207,11 @@ plot(NUTS3_16, add= TRUE) #
 # result %>% head()
 ```
 
+Unite city-points with the databases of characteristcs
 
 ```{r}
+# To unite them I found out a wat yo do it with "sf" so I convert them into sf and then go back.
+
 library(sf)
 
 # Convert to sf-objects
@@ -217,34 +235,31 @@ uar_nuts <- as(uar_points.sf_nuts, "Spatial")
 gz_nuts <- as(gzones_sp.sf_nuts, "Spatial")
 # srdf_meuse <- as(srdf_meuse, "Spatial")
 
-gzones_sp.sf_nuts %>% as.data.frame() %>%
-      group_by(NUTS_ID) %>% 
-      summarise(min_time = min(InPlaceSince)) -> min_time
 
-nuts.sf %>%
+# Create a variable of minimum time for gzones (GZ):
+
+gzones_sp.sf_nuts %>% as.data.frame() %>%
+      dplyr::group_by(NUTS_ID) %>% 
+      dplyr::summarise(min_time = min(InPlaceSince)) -> min_time
+```
+
+Include all relevant data in nuts.sf and save it.
+
+```{r}
+# Mark NUTS 3 regions that have a city or point marked in eather UAR or GZ
+nuts.sf <- nuts.sf %>%
   mutate(
     appl_uar = NUTS_ID %in% uar_points.sf_nuts$NUTS_ID,
     appl_gz = NUTS_ID %in% gzones_sp.sf_nuts$NUTS_ID
     # min_apl_date = gzones_sp.sf_nuts$min_time
   ) %>%
-  left_join(min_time) -> nuts.sf
+  left_join(min_time) %>%
+  select(-c("FID")) # duplicated
 
 nuts.sf %>% as.data.frame() %>% head(20)
+
+st_write(obj = nuts.sf, "data/nuts_sf.shp", delete_layer = TRUE)
+
+# plot(nuts.sf %>% select(appl_uar))
 ```
 
-
-
-
-## Extras:
-
-### Try to extract kmls (geographies of all LEZ):
-
-```{r}
-# library(rgdal)
-# belg_ghent = readOGR(dsn = "~/A - Estudios/LSE - Applied Social Data Science/Project/PM2.5/Data Europe/BelgienGent.kmls")
-# ??readOGR
-```
-
-### Good info on spatial analysis:
-
-https://mgimond.github.io/Spatial/uncertainty-in-census-data.html
