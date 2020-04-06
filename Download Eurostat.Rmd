@@ -643,6 +643,8 @@ down_eurostat("bd_esize_r3") -> e_bd_employer_size_2008
 write.csv(e_bd_employer_size_2008,
           "data/eurostat_bd_employer_size_2008.csv")
 
+# read.csv("data/eurostat_bd_employer_nace_2008.csv")
+# read.csv("data/eurostat_bd_growth_size_2008.csv")
 ```
 
 ### Envirnonment:
@@ -704,4 +706,22 @@ Notes:
   + Look data for NUTS 2 too, especially the medical and others https://ec.europa.eu/eurostat/web/regions/data/database
 
 * Decription link: https://www.novixys.com/blog/using-aes-encryption-decryption-python-pycrypto/
+
+Download data from NOMIS (detailed UK data)
+
+```{r}
+#https://www.nomisweb.co.uk/api/v01/dataset/NM_17_5.data.csv?geography=352321540,352321541,352321543,352321590,352321546,352321547,352321549...352321551,352321557,352321555,352321556,352321552...352321554,352321597,352321598,352321560,352321545,352321584,352321548,352321585,352321599,352321600,352321580,352321537,352321538,352321591,352321571...352321573,352321592,352321596,352321595,352321593,352321589,352321594&date=latestMINUS56,latestMINUS52,latestMINUS48,latestMINUS44,latestMINUS40,latestMINUS36,latestMINUS32,latestMINUS28,latestMINUS24,latestMINUS20,latestMINUS16,latestMINUS12,latestMINUS8,latestMINUS4,latest&variable=18,434...437,84&measures=20599,21001,21002,21003
+
+nomis_dta <- read.csv("https://www.nomisweb.co.uk/api/v01/dataset/NM_17_5.data.csv?geography=352321540,352321541,352321543,352321590,352321546,352321547,352321549...352321551,352321557,352321555,352321556,352321552...352321554,352321597,352321598,352321560,352321545,352321584,352321548,352321585,352321599,352321600,352321580,352321537,352321538,352321591,352321571...352321573,352321592,352321596,352321595,352321593,352321589,352321594&date=latestMINUS56,latestMINUS52,latestMINUS48,latestMINUS44,latestMINUS40,latestMINUS36,latestMINUS32,latestMINUS28,latestMINUS24,latestMINUS20,latestMINUS16,latestMINUS12,latestMINUS8,latestMINUS4,latest&variable=18,434...437,84&measures=20599,21001,21002,21003")
+
+nomis_dta %>% summary()
+nomis <- nomis_dta %>%
+  select(DATE, GEOGRAPHY, GEOGRAPHY_NAME, VARIABLE,  
+         VARIABLE_NAME, MEASURES_NAME, OBS_VALUE)
+nomis %>% 
+  filter(VARIABLE == 18,
+         MEASURES_NAME == "Variable") %>%
+  summary()
+```
+
 

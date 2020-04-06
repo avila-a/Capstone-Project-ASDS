@@ -155,18 +155,24 @@ data_synth <- data_synth %>%
 
 data_synth_c <- data_synth %>%
   filter(time < 2017, # Delete 2017 that has too many missing
-         !is.na(gdp_eur_hab)) %>% # Delete those with NA
+         !is.na(gdp_eur_hab),
+         !is.na(gva_A),
+         !is.na(gva_G_I)) %>% # Delete those with NA
   group_by(geo) %>% # Delete those that do not have the whole period
-  dplyr::mutate(na_in_geo = ifelse(n() == 17, FALSE, TRUE)) %>%
+  dplyr::mutate(na_in_geo = ifelse(n() == 17, FALSE, TRUE)) %>% # Create marker
   filter(na_in_geo == FALSE) %>% select(-na_in_geo) %>%
-  filter(!(appl_gz == 0 & appl_uar == 1)) # Delete suspicious controls
+  # Delete suspicious controls (that have applied some UAR)
+  filter(!(appl_gz == 0 & appl_uar == 1)) 
 
 # data_synth_c$na_in_geo%>% table()
 
 colSums(is.na(data_synth_c))
 
 data %>% names()
-panelView(gdp_eur_hab_norm ~ treat_gz, data = data_synth_c, 
+panelView(gdp_eur_hab_norm ~ treat_gz + gva_A + gva_B_E + 
+            gva_F + gva_G_I + gva_J + gva_K + gva_L + 
+            gva_M_N + gva_O_U, 
+          data = data_synth_c, 
           index = c("geo","time"), xlab = "Year", ylab = "Geo",
           by.timing = TRUE, 
           axis.adjust = TRUE,
@@ -177,7 +183,7 @@ panelView(gdp_eur_hab_norm ~ treat_gz, data = data_synth_c,
 #           # by.group = TRUE, 
 #           axis.adjust = TRUE,
 #           type = "outcome")
-data_synth_c
+data_synth_c %>% head()
   
 ```
 
@@ -189,6 +195,7 @@ data_synth_c
 # install.packages("Synth")
 library(Synth)
 data(basque)
+basque
 ?basque
 basque
 ?Synth::dataprep()
@@ -226,15 +233,17 @@ out <- gsynth(Y ~ D + X1 + X2, data = simdata,
               inference = "parametric", nboots = 1000, 
               parallel = FALSE)
 
-out2 <- gsynth(gdp_eur_hab ~ treat_gz, 
+out2 <- gsynth(gdp_eur_hab ~ treat_gz + gva_A + gva_B_E + 
+            gva_F + gva_G_I + gva_J + gva_K + gva_L + 
+            gva_M_N + gva_O_U, 
               data = data_synth_c, 
               index = c("geo","time"), 
               force = "two-way", CV = TRUE, 
               r = c(0, 4), # an integer specifying the number of factors. If CV = TRUE, the cross validation procedure will select the optimal number of factors from r to 5.
               se = TRUE, 
               # EM = TRUE, # Gobillon and Magnac (takes a lot of time)
-              inference = "parametric", nboots = 1000, 
-              parallel = FALSE,
+              inference = "parametric", nboots = 500, 
+              parallel = TRUE,
               min.T0 = 6) # Has to be larger than r.max+1
 
 # Idea: include countries/NUTS 2 regions and others as FE to control for heterogeneity?
@@ -260,21 +269,21 @@ out2$eff.cnt %>% as.data.frame() %>% # Y - predicted Y(0);
   rownames_to_column(var = "year") %>% 
   mutate(year = as.numeric(year)) %>%
   pivot_longer(-year, names_to = "geo", 
-               values_to = "y_minus_y0") -> all_treat_effects
+               values_to = "y_minus_y0") %>%
+  left_join(data) -> all_treat_effects
 
 all_treat_effects %>%
   ggplot(aes(x = year, y = y_minus_y0)) +
-  geom_line( aes(colour = geo)) +
-  theme(legend.position = "none")
+  geom_line( aes(colour = nuts_name))
 # Note: I need to see if this continues to happen for random pacebo treatments 
-
+all_treat_effects
 ```
 
 
 ```{r}
 # out2$est.co$residuals %>% as.data.frame()
 # plot(out2, ylim = c(-0.4, 0.02))
-plot(out2, ylim = c(-5000, 1000))
+plot(out2, ylim = c(-5000, 2000))
 
 plot(out2, type = "counterfactual", 
      raw = "all", main="") # Why the final dip?
@@ -287,9 +296,29 @@ plot(out2, type = "counterfactual", id = "FR101") # Paris
 plot(out2, type = "counterfactual", id = "HU110") # Budapest
 plot(out2, type = "counterfactual", id = "DE111") # Stuttgart
 plot(out2, type = "counterfactual", id = "DE212") #	München
+plot(out2, type = "counterfactual", id = "UKI32") #	Westminster (LDN)
+# LONDON BOROUGHS! UKI31 - UKI45
+# UKI31	Camden and City of London	
+# UKI32	Westminster
+# UKI33	Kensington & Chelsea and Hammersmith & Fulham		
+# UKI34	Wandsworth		
+# UKI41	Hackney and Newham		
+# UKI42	Tower Hamlets
+# UKI43	Haringey and Islington		
+# UKI44	Lewisham and Southwark		
+# UKI45	Lambeth
+# UKI51	Bexley and Greenwich		
+# UKI52	Barking & Dagenham and Havering		
+# UKI53	Redbridge and Waltham Forest		
+# UKI54	Enfield
 
 data_synth_c %>%
-  filter(substr(geo, 1, 2) == "DE")
+  filter(substr(geo, 1, 2) == "UK") %>%
+  arrange(geo) %>%
+  filter(geo == "UKI32")
+
+# London (LEZ) initial date (2008) is WRONG, it is the ULEZ one (2019)
+# The CCS was introduced in 2003, expansion on 2007
 ```
 
 
@@ -304,5 +333,15 @@ _NOTE_: The files are encrypted, I need to deencrip them before. C#.
 ```
 
 ### Good info on spatial analysis:
-
 https://mgimond.github.io/Spatial/uncertainty-in-census-data.html
+
+### New methodologies (2019) on multiple timing and periods DiD:
+https://andrewcbaker.netlify.com/2019/09/25/difference-in-differences-methodology/
+
+
+## Similar analysis with code and other methodologies: (to read and review)
+https://andrewcbaker.netlify.com/2020/01/01/what-can-we-say-about-medical-marijuana-and-opioid-overdose-mortality/
+
+## How much pollution comes from cars? (and other info from the EC):
+https://ec.europa.eu/environment/air/cleaner_air/
+

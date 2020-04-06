@@ -18,6 +18,8 @@ library("rgdal") # ReadOGR
 # setwd("~/A - Estudios/LSE - Applied Social Data Science/Project/PM2.5/Data Europe/")
 ```
 
+## Get data from Urban Access Regulations (webpage)
+
 1. Read the data:
 
 ```{r}
@@ -32,6 +34,8 @@ uar[4:7, 2]
 uar$introtext[2] %>% cat()
 ```
 
+Note: Look if I can scrape more info from the pages or descriptions.
+
 Get the meanings of the colours:
 
 https://urbanaccessregulations.eu/userhome/map#car
@@ -44,10 +48,20 @@ uar <- uar %>%
     other_reg = ifelse(scheme_color == 3, TRUE, FALSE),
     em_scheme = ifelse(scheme_color == 4, TRUE, FALSE),
     city_latitude = as.numeric(city_latitude),
-    city_longitude = as.numeric(city_longitude)
-  )
+    city_longitude = as.numeric(city_longitude),
+    scheme_color = as.numeric(scheme_color)
+  ) %>%
+  mutate(scheme = case_when( 
+         scheme_color == 1 ~ "lez",
+         scheme_color == 2 ~ "urban toll",
+         scheme_color == 3 ~ "other regulations",
+         scheme_color == 4 ~ "pollution emergency") %>% as.factor())
 
 uar %>% head()
+
+uar %>% # All mesures are included
+  filter(str_detect(uar$cityname, "Paris"))
+# uar %>% dim() # Almost 700 legislations!
 ```
 
 
@@ -56,7 +70,7 @@ Read the scheme data
 ```{r}
 # This gives me the lists of names and their Ids
 allscheme <- read_json(path = "AllScheme.txt", 
-                      simplifyVector = TRUE)[[1]]
+                       simplifyVector = TRUE)[[1]]
 write.csv(x = uar, file = "UAR_data/uar.csv")
 write.csv(x = allscheme, file = "UAR_data/id_name_pairs.csv")
 ```
@@ -111,8 +125,7 @@ zones <- zones %>%
     lat = (MaxLatitude + MinLatitude)/2,
     lon = (MaxLongitude + MinLongitude)/2
     ) %>%
-  select(-c("InkraftSeit", "MaxLatitude", "MinLatitude",
-            "MaxLongitude", "MinLongitude"))
+  select(-c("InkraftSeit"))
 
 zones %>% head()
 
@@ -134,12 +147,14 @@ Objective:
 
 (a) Which UAR have been applied in that zone, (DONE)
 (b) from when? (DONE)
-(c) any economical data from Eurostat. (TO DO)
+(c) any economical data from Eurostat. (DONE)
 (d) Look at sources of air pollution (TO DO)
 (e) Look at sources of congestion (TO DO)
 
 
-Use the coordinates to know which NUTS 3 regions are "treated" OR "not in the control" group
+### Know which zones are treated:
+
+#### Use the coordinates to know which NUTS 3 regions are "treated" OR "not in the control" group
 
 ```{r}
 
@@ -174,11 +189,15 @@ NUTS3_16@data %>% head()
 
 
 ```{r}
-# Convert data from cities into points:
+# Convert data from cities into geolocations:
 ## From UAR:
+
+uar <- uar %>% arrange(scheme_color) # to improve the map
+
+# (points)
 uar_sp <- SpatialPointsDataFrame(
   coords = cbind(uar$city_longitude, uar$city_latitude),
-  data = uar
+  data = uar 
 )
 
 # uar$points <- SpatialPoints(cbind(uar$city_latitude, uar$city_longitude))
@@ -188,6 +207,7 @@ proj4string(uar_sp) <- CRS("+proj=longlat +datum=WGS84 +no_defs")
                         # CRS("+proj=longlat +datum=WGS84 +no_defs"))
 
 ## From GreenZones:
+# (points)
 gzones_sp <- SpatialPointsDataFrame(
   coords = cbind(zones$lon, zones$lat),
   data = zones
@@ -196,21 +216,76 @@ gzones_sp <- SpatialPointsDataFrame(
 gzones_sp@coords[155,] <- c(18.0280074, 59.3359563)
 proj4string(gzones_sp) <- CRS("+proj=longlat +datum=WGS84 +no_defs")
 
+# (polygons)
+# 1. Create a list of polygons with the latitudes and longitudes
+zones_polygons <- apply(
+  X = t(zones[c("MinLongitude", "MinLatitude",
+                "MaxLongitude", "MaxLatitude")]),
+  MARGIN = 2, 
+  function(x){
+    Polygon(matrix(c(x[1], x[2], # lower left
+                     x[1], x[4], # lower right
+                     x[3], x[4], # upper right
+                     x[3], x[2], # upper left 
+                     x[1], x[2]  # The beguinning again
+    ), byrow = TRUE, ncol = 2), hole = FALSE)
+  })
+# 2. transform them into "spatial polygons" and create a SpatialDF:
 
-plot(gzones_sp, col = "red")
-plot(uar_sp, col = "blue", add = TRUE)
-plot(NUTS3_16, add= TRUE) #
-# zones$points <- SpatialPoints(cbind(zones$lat, zones$lon))
+# This is going for each polygon, transform it into a "Polygons".
+p1 <- lapply(seq_along(zones_polygons), function(i){
+  Polygons(list(zones_polygons[[i]]), ID = row.names(zones)[i])
+})
 
+sps = SpatialPolygons(p1, 
+                      proj4string = CRS("+proj=longlat +datum=WGS84 +no_defs"))
 
-# result <- uar$points %>% over(NUTS3_16)
-# result %>% head()
+gzones_sp_pol <- SpatialPolygonsDataFrame(sps,
+                                          data = zones)
+
+# { # Old static map
+#   plot(uar_sp, col = "blue")
+#   plot(NUTS3_16, add = TRUE)
+#   plot(gzones_sp_pol, col = "red", add = TRUE)
+# }
+
+# New Leaflet map
+col_map <- c("red", "blue", "green")
+col_size <- c(4,3,1,2)
+
+leaflet() %>% 
+  addTiles() %>% 
+  addPolygons(data = NUTS3_16) %>%
+  addPolygons(
+    data = gzones_sp_pol,
+    popup = paste0("<b> Name: </b>", gzones_sp_pol$KML,  
+                   "<br/> <b> In place since: </b>", gzones_sp_pol$InPlaceSince, 
+                   "<br/> <b> Country: </b>", gzones_sp_pol$TitelLocal,
+                   "<br/> <b> Source: </b> GreenZonesApp")) %>%
+  addCircleMarkers(
+    data = uar_sp, weight = NA,
+    opacity = 0.1,
+    color = NA,
+    fillColor = col_map[uar_sp$scheme_color],
+    fillOpacity = 0.9,
+    radius = col_size[uar_sp$scheme_color]*2,
+    popup = paste0("<b>", uar_sp@data$cityname, "</b> <br/>",
+                   "<b> Scheme: </b>", uar_sp$scheme, "<br/>",
+                   "<b> Source: </b> U.A.R")
+    )
 ```
 
-Unite city-points with the databases of characteristcs
 
 ```{r}
-# To unite them I found out a wat yo do it with "sf" so I convert them into sf and then go back.
+# Include if a NUTS region is included in gzones or uar.
+gzones_sp_pol %>% head() %>% as.data.frame()
+```
+
+
+Unite city-points/zones with the databases of characteristcs
+
+```{r}
+# To unite them I found out a wat to do it with "sf" so I convert them into sf and then go back.
 
 library(sf)
 
@@ -218,12 +293,31 @@ library(sf)
 nuts.sf <- st_as_sf(NUTS3_16)
 uar_points.sf <- st_as_sf(uar_sp)
 gzones_sp.sf <- st_as_sf(gzones_sp)
+gzones_sp_pol.sf <- st_as_sf(gzones_sp_pol)
 
-# Keep all "meuse.sf", sort by row.names(meuse.sf). Default overlay is "intersects".
+# This keeps all the cities (regulations) and includes the LEZ zone in which they "intersect" (default) in and their characterisitics.
+
 uar_points.sf_nuts <- st_join(uar_points.sf, nuts.sf) 
 gzones_sp.sf_nuts <- st_join(gzones_sp.sf, nuts.sf) 
+gzones_sp_pol.sf_nuts <- st_join(gzones_sp_pol.sf, nuts.sf) 
 
-gzones_sp.sf_nuts %>% as.data.frame() %>% head()
+# We can see the one with poligons has more rows
+lapply(list(gzones_sp.sf_nuts, gzones_sp_pol.sf_nuts), dim)
+
+# Look for Paris:
+lapply(list(gzones_sp.sf_nuts, gzones_sp_pol.sf_nuts), function(x){
+  as.data.frame(x) %>% 
+  filter(ElternzoneId == 22)  %>%
+  select(NUTS_NAME) %>% as.character()
+}) # The zones df includes all NUTS regions in contact with the zone!
+
+# Note: This looks like be easily changed from "intersect" to "covers" or "is_within_distance"
+
+
+gzones_sp.sf_nuts %>% as.data.frame() %>% 
+  filter(ElternzoneId == 22)
+?st_join
+
 # st_contains(points.sf, nuts.sf)
 
 plot(uar_points.sf_nuts)
@@ -237,11 +331,52 @@ gz_nuts <- as(gzones_sp.sf_nuts, "Spatial")
 
 
 # Create a variable of minimum time for gzones (GZ):
-
-gzones_sp.sf_nuts %>% as.data.frame() %>%
+# The time the FIRST measure was applied.
+# Note: This is not perfect because it only includes the zone of the point and not evet NUTS included in the LEZ.
+min_time <- gzones_sp.sf_nuts %>% as.data.frame() %>%
       dplyr::group_by(NUTS_ID) %>% 
-      dplyr::summarise(min_time = min(InPlaceSince)) -> min_time
+      dplyr::summarise(min_time = min(InPlaceSince))
 ```
+
+```{r}
+min_time
+```
+
+
+Map of LEZ zones affected:
+NOTE: Need to add ALL ZONES of a city that are affected. (use the bbox of one data or get the shapefiles of each zone)
+
+```{r}
+dta_uar <- uar_points.sf_nuts %>% as.data.frame() %>%
+  select(NUTS_ID, NUTS_NAME, scheme)
+
+dta_gz <- gzones_sp.sf_nuts %>% as.data.frame() %>%
+  select(NUTS_ID, NUTS_NAME, InPlaceSince)
+
+
+NUTS3_map <- NUTS3_16
+NUTS3_map@data <- NUTS3_16@data %>%
+  left_join(dta_uar) %>%
+  left_join(dta_gz)
+
+library(tmap)
+library(leaflet)
+tm(temp, "scheme")
+qtm_lez <- tmap::qtm(temp, fill = "scheme", 
+                     bbox = c(-10, 30, 50, 71), 
+                     borders = NULL)
+
+##  ESTO DA LOS LUGARES EQUIVOCADOS PERO ES UN BUEN INTENTO
+# leaflet() %>% addTiles() %>%
+#   addPolygons(data = NUTS3_map,
+#               popup = paste0("Name: ", NUTS3_map$NUTS_NAME),
+#               weight = 0.5,
+#               fill = NUTS3_map$scheme)
+
+qtm_lez
+tmap::tmap_leaflet(qtm_lez)
+```
+
 
 Include all relevant data in nuts.sf and save it.
 
