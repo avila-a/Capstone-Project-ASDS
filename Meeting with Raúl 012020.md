@@ -18,7 +18,7 @@
 
 Given I have a decent amount of data regarding the geolocation and characteristics of LEZ and other Urban Access Regulations I thought it is a opportunity to increase the scope of the analysis:
 
-+ ***In the call: See the map and the DB from sources to have a sense of the data I have. Data comes from 2 sources. $\rightarrow$ R (look at the other attached HTML file)***
++ ***In the call: See the map and the DB from sources to have a sense of the data I have. Data comes from 3 sources. $\rightarrow$ R (look at policy_map.html)***
 
 |                         Subject                         | Pros                                                         | Cons                                                         |
 | :-----------------------------------------------------: | ------------------------------------------------------------ | ------------------------------------------------------------ |

@@ -1,12 +1,20 @@
 # Meeting with Raúl 05/2020
 
+:question: Q. MY400 assignment?
+
 ## Main points:
 
 - [x] Possibility to increase the sample to all the UK / All Germany / European Union
 
-- [x] Approach to "exogeneity" of the treatment
+- [x] Approach to "Exogeneity" of the treatment $\rightarrow$ I need a "suitable" comparison group
 
-- [x] Rationalization of "transmission mechanisms"
+- [ ] SUTVA $\rightarrow$ How do I look for Displacement?
+
+- [ ] Rationalization of "transmission mechanisms" $\rightarrow$ See both possibilities
+
+- [ ] Possibility of reversing the methodology.
+
+- [ ] Issue on
 
   
 
@@ -16,15 +24,21 @@ Given I have a decent amount of data regarding the geolocation and characteristi
 
 > *Raúl:* "Your question about increasing the sample size is not just about n; the way I see it, it is mainly about the universe (your entities of interest) and the alignment between your question and data."
 
-+ ***In the call: See the map and the DB from sources to have a sense of the data I have. Data comes from 2 sources. $\rightarrow$ R (look at the other attached HTML file)***
++ ***In the call: See the map and the DB from sources to have a sense of the data I have. Data comes from 3 sources. $\rightarrow$ R (look at policy_map.html)***
+
+
+
+#### Should I increase the sample?
 
 |                         Subject                         | Pros                                                         | Cons                                                         |
 | :-----------------------------------------------------: | ------------------------------------------------------------ | ------------------------------------------------------------ |
 |                     **Complexity**                      |                                                              | Higher computational power and more complex code (I need a set of controls for each city) |
 | **Compare policies relative effect** (policy relevance) | I can compare between different cities and their implementations of the policies. | Need good (better if detailed) data of implementations       |
 |                                                         | I Eliminate the problems of high spillovers between London zones |                                                              |
-|                     **Usefulness**                      | Higher external validity and usual standard errors of coefficients. | Better analysis of the London case                           |
-|                       **Methods**                       | I can use a wider set of methods, from Diff-in-diff to newer forms of synthetic control methods (matrix completion method, generalized SYNTH) | Hill have to do a bit more research on those.                |
+|                     **Usefulness**                      | Higher external validity and usual standard errors of coefficients. | Better analysis of the London specific case                  |
+|                       **Methods**                       | I can use a wider set of methods, from Diff-in-diff to newer forms of synthetic control methods (matrix completion method, generalized SYNTH) | Will have to do a bit more research on those.                |
+
+
 
 #### Possible increases of sample
 
@@ -35,7 +49,7 @@ Given I have a decent amount of data regarding the geolocation and characteristi
 |             | LEZ implemented sooner and in higher numbers. More treated, but probably less controls if they are also restricted. | **Foreign language (webpages / legislations / data sources)** |
 |   **UK**    | Known language                                               | LEZ implemented latter (besides London), less information about them. |
 |             | Has additional data on Productivity and Household Income.    |                                                              |
-|   **EU**    | Known language                                               | Less control over data errors                                |
+|   **EU**    | Known language                                               | Less control over data errors/imprefections                  |
 |             | I can be restricted to some of them whom data I trust because I have more to discard. | More cities to consider and thus more data to collect        |
 
 | Condition                  | Germany                                                      | UK                                       |
@@ -45,21 +59,45 @@ Given I have a decent amount of data regarding the geolocation and characteristi
 | Pre-post intervention info | They start in 2008 or latter                                 | London starts too early (2003) others... |
 | No anticipation            | There is anticipation (vehicle composition from) but maybe not significant to pollution (APO and FLEZ) Wolff, (2013) | No info                                  |
 
+#### The German sample:
+
+<img src="C:\Users\aavil\OneDrive\Documentos\A - Estudios\LSE_ASDS\Project\PM2.5\Capstone-Project\Easter situation - Meeting with Raúl 052020.assets\LEZ application germany.png" width="550px" />
 
 
-## Approach to exogeneity of the treatment and SUTVA:
+
+My units of analysis: Cities that have applied a LEZ.
+
+My statistical units: NUTS (1-3) regions. Some of them are good fit (especially in Germany), some of them are not that close (Spain, France and Italy)
+
+<img src="C:\Users\aavil\OneDrive\Documentos\A - Estudios\LSE_ASDS\Project\PM2.5\Capstone-Project\Easter situation - Meeting with Raúl 052020.assets\Berlin_terrain.jpg" width="250px" /><img src="C:\Users\aavil\OneDrive\Documentos\A - Estudios\LSE_ASDS\Project\PM2.5\Capstone-Project\Easter situation - Meeting with Raúl 052020.assets\Munich_terrain.jpg" width="250" /><img src="C:\Users\aavil\OneDrive\Documentos\A - Estudios\LSE_ASDS\Project\PM2.5\Capstone-Project\Easter situation - Meeting with Raúl 052020.assets\Madrid3.jpg" width="250px" />
+
+
+
+## Approach to exogeneity of the treatment :
 
 I need both but the solutions of one might compromise the other...
 
+#### Exogeneity
+
 * Exogenous distribution of fixed characteristics :arrow_right: NO
   * The synthetic control will take care of that by constructing a control with "the same" characteristics.
-* Only exogenous (or global) shocks in treatment period :arrow_right: YES, 
+* Only global shocks in study period. The size of the bias increases with the size of idiosyncratic shocks and is reduced by the number of pre-intervention periods. (Abadie, 2019) :arrow_right: **A suitable comparison group**
 
-#### A suitable comparison group (ex exogeneity):
+#### A suitable comparison group:
 
-What would make the assumption of only exogenous shocks? That treatment and control are significantly different in characteristics that condition the final output.
+Example of possible "Idiosyncratic Shocks": The relative effects of the financial crisis to north-European and south-European countries.
 
-How to have a strong argument of exogeneity?
+* 8-18 years of pre-treatment period will allow to check if output paths are good enough
+* Strongly affected controls can be combined with others that had a smaller impact.
+
+##### Other EU cities that have applied a LEZ and when they did it (Relative size of the comparison group across time)
+
+<img src="C:\Users\aavil\OneDrive\Documentos\A - Estudios\LSE_ASDS\Project\PM2.5\Capstone-Project\Easter situation - Meeting with Raúl 052020.assets\UAR application Europe.png" width="400px" />
+
+* There continues to be a sizable amount of controls (who latter become treatments) until 2017 from countries comparable to Germany (France, Belgium, Germany, Switzerland, UK, Germany itself...)
+  * _And I still need to add cities that have never been treated, who are also suitable controls_!
+
+How to have a strong argument against idiosyncratic shocks?
 
 * Include a fair number of relevant economic characteristics in the Synthetic Control estimation and test for their balance.
 * To a "Backdating" test, if the Synthetic control accurately predicts the pre-intervention path, it should be credible as a counterfactual.
@@ -67,9 +105,11 @@ How to have a strong argument of exogeneity?
   * *Note: They do not use Synth, they do a FE complex linear regression*
 * Argument theoretically:
   * The decision is not really optional, it mainly comes from the obligation to comply with the European Commission regulations in air quality, thus self-selection is less likely.
-  * Ask Laura Dyett (TFL) on the variables she took into account when 
+  * :bulb: ​Ask Laura Dyett (TFL) on the variables she took into account when applying London's LEZ.
 
-#### SUTVA
+
+
+## SUTVA
 
 SUTVA requires that the response of a particular unit depends only on the treatment to which he himself was assigned, not the treatments of others around him.
 
@@ -79,13 +119,23 @@ Possible spillover effects:
 
 * **Contagion/Signaling**: A LEZ in a big city makes the fleet of cars change and thus all their neighboring cities will have part of their fleet changed
 * **Anticipation**: LEZ zones are advertised before application to give some time to change fleet so the effects might be seen before application or the timing of effects might not be perfect.
-  * :arrow_right: Both can be solved by backdating if I have the data on cars from Wolff
+  * :bulb: Both are partially solved by **Wolff (2015)** an **Gehritz (2017)**, but can be reviewed if I have the data on cars from Wolff and solved with backdating.
 * **Displacement**: If a very strong LEZ displaces business to "control" cities, the ATE on GDP, employment, ... would be biased. Does not make much sense if almost all of them will apply a LEZ soon.
-  * :question: How can I test, discard this. Especially for the city of Hamburg that has NOT applied any LEZ. Maybe I need to do tests with and without Hamburg as a control observation.
+  * :question: How can I test, discard or argument that it is not economically significant? 
+    * Especially for the city of Hamburg that has NOT applied any LEZ. 
+    * :bulb: Maybe I need to do tests with and without Hamburg as a control observation.
+
+Possible Solutions:
+
+* Only take cities who are 50-100km away from any active LEZ
+* Unite the Rhine-Ruhr metropolitan area as an unique city.
+* Backdating and leave-one-out robustness tests
+
+
 
 ## Rationalization of transmission mechanisms:
 
-*Note: Read more on the mediation literature: (see "Indentify more, observe less" paper)*
+:spiral_notepad: Read more on the mediation literature: (see "Indentify more, observe less" paper)*
 
 ### How do I shine light on this network of effects?
 
@@ -94,22 +144,22 @@ stateDiagram
         Econ_and_Geo_determinants --> productivity
         Econ_and_Geo_determinants --> GDP
         #Econ_and_Geo_determinants --> employment
-        pollution --> productivity : -
-        pollution --> mortality_or_emigration : +
-        absentism --> productivity : -
-        congestion --> productivity : -
-        Labour --> GDP : (+) 
-        mortality_or_emigration --> Labour : -
-        productivity --> Labour : +
-        employment --> Labour : +
-        productivity --> employment : ?
+        pollution --> productivity : ---
+        pollution --> mortality_or_emigration : +++
+        absentism --> productivity : ---
+        congestion --> productivity : ---
+        Labour --> GDP : (+++) 
+        mortality_or_emigration --> Labour : ---
+        productivity --> Labour : +++
+        employment --> Labour : +++
+        productivity --> employment : ???
         Econ_and_Geo_determinants --> pollution
-        LEZ --> pollution : -
-        LEZ --> GDP : Other econ effects, (-)
-        pollution --> absentism : +? Dependency ratio
-        Econ_and_Geo_determinants --> LEZ : Endogeneity risk?
-        LEZ --> employment : ?
-        LEZ --> congestion : -
+        LEZ --> pollution : ---
+        LEZ --> GDP : Other econ effects, (---)
+        pollution --> absentism : +++? Dependency ratio
+        Econ_and_Geo_determinants --> LEZ
+        LEZ --> employment : ???
+        LEZ --> congestion : ---
         #LEZ --> Costs
         #LEZ --> Profits
         #Profits --> K
@@ -118,7 +168,9 @@ stateDiagram
         #second --> [*]
 ```
 
-I have data on: LEZ, Pollution, Employment, "productivity", deaths,  GDP
+I have data on: LEZ, Pollution, Employment, "productivity", hours worked, deaths, GDP
+
+_:exclamation: Note to review: do hours worked are contract-hours worked or real hours worked?_
 
 ### 1. Estimate the overall effects of LEZ in economic outputs with a Synthetic Control Method:
 
@@ -155,15 +207,15 @@ stateDiagram
 
 ### 2. Get the mediator effects: Two options  to choose from:
 
-#### 1. Use the methodology from "Identify more, observe less" --> [link](https://www.mendeley.com/reference-manager/reader/bd6a35f1-a6e2-3993-be0d-3dd26b0b3c0f/60cc649b-ae37-f6ef-2ebc-627890c8076a/)
+#### A. Use the methodology from "Identify more, observe less" --> [link](https://www.mendeley.com/reference-manager/reader/bd6a35f1-a6e2-3993-be0d-3dd26b0b3c0f/60cc649b-ae37-f6ef-2ebc-627890c8076a/)
 
 In order to estimate the effect that is mediated by pollution (4): 
 
 $(2) \frac{dln(GDP)}{d(\gamma_{LEZ\rightarrow Pollution})} = \frac{dln(GDP/WorkingPop)}{d(\gamma_{LEZ\rightarrow Pollution})} + \frac{dln(WorkingPop/WorkingAgePop)}{d(\gamma_{LEZ\rightarrow Pollution})} + \frac{dln(WorkingAgePop/Pop)}{d(\gamma_{LEZ\rightarrow Pollution})} +\frac{dln(Pop)}{d(\gamma_{LEZ\rightarrow Pollution})}, \\ \gamma_{LEZ\rightarrow Pollution} = \frac{dln(Pollution)}{d(LEZ)}$ 
 
-And the one that comes from other causal paths: Equation (3) - Equation (4)
+And the one that comes from other causal paths: Equation (1) - Equation (2)
 
-#### 2. Use the estimated effects LEZ into economic output as explanatory variables:
+#### B. Use the estimated effects LEZ into economic output as explanatory variables:
 
 From step 1 I have the effect of LEZ in each economic output and mediator of interest:
 
@@ -199,27 +251,46 @@ $$
 cor(Z, TE_{LEZ\rightarrow e}) \neq 0 \text{ and } cor(Z, TE_{LEZ\rightarrow GDP}) \neq 0 \\ \text { because } \\ cor(LEZ, TE_{LEZ\rightarrow GDP}) \neq 0
 $$
 
-This will summarize the effects on the labour input of GDP, as this is the one who is more probably positively affected by the introduction of a LEZ.
+This will summarize the effects on the labor input of GDP, as this is the one who is more probably positively affected by the introduction of a LEZ.
 
-#### Doubts on my method:
+
+
+## Reversing the SCM to form a "Synthetic treated method":
+
+With time $t$, unit $i$ and treatment $D \in \{0, 1\}$ and the set of potential outcomes $Y_{it}(D)$ the SCM estimates $\hat{Y}_{it}(D = 0)$ for treated units by creating a synthetic control from a pool of control units. 
+
+:question: Can I create a synthetic treated $\hat{Y}_{it}(D = 1)$ for units that are control from a pool of treated units? Would the same properties apply? Can I use this to estimate the potential effects a given policy would have had?
+
+
+
+## :question: General doubts on my method:
 
 * Possible flaws? 
   * Is this a sizable effect? (2 effects in the economy: positive and negative)
-    * Positive :arrow_down: in pollution: $TE_{LEZ\rightarrow Pollution}$ -0.67 to -1.3$\mu g/m^3$ (Gherritz 2017), which translates to a close-to-1% reduction in GDP according to Dechezlepêtre.
-    * Negative. No studies, we don't know?
+    * **Positive**: Reduction of pollution: $TE_{LEZ\rightarrow Pollution}$ -0.67 to -1.3$\mu g/m^3$ (Gherritz 2017), which translates to a close-to-1% reduction in GDP according to Dechezlepêtre.
+    * **Negative**.
+      * Very discussed study gives a 7% decrease in costumers in the city center (Germany).
+      * TFL first-differences approach gives no significant positive or negative results.
+      * Just this from **Gehritz (2017)** looks like some preliminary evidence of an increase on unemployment:
+
+    <img src="C:\Users\aavil\OneDrive\Documentos\A - Estudios\LSE_ASDS\Project\PM2.5\Capstone-Project\Easter situation - Meeting with Raúl 052020.assets\Unemployment rates in early and late german adopters.jpg" width="400px" />
+
+    (Early adopters of German LEZ have a relative increase in unemployment relative to late- and never-adopters
+
+    Looks like a 1% difference in unemployment that is bigger than transitory shocks)
 * How  convincing it really is? 
+  
   * :question:
 
 #### Questions:
 
-* How to include Investment (K) and human capital (H)?
+* How to include Investment (K) and human capital (H)? Are they different transmission mechanisms?
 
-##### Doubts:
 
-* Can I do with different transmission mechanisms? Should they be "one directional"? If not, should I use IV or something?
-* Where is a package that does this? Should I write it myself?
 
 ---
+
+
 
 ## *Only If we have more time...*
 
