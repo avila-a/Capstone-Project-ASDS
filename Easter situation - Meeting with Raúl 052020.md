@@ -1,6 +1,8 @@
-# Meeting with Raúl 05/2020
+# Meeting with Alasdair 05/2020
 
-:question: Q. MY400 assignment?
+* :question: Q. MY400 assignment? $\rightarrow$ Would you correct them? Read them? Some things were not mentioned by lack of space
+* :question: Any doubts regarding my Capstone presentation? (sample, technique, assumptions...)
+* :question: Anything that you would like to review?
 
 ## Main points:
 
@@ -8,15 +10,14 @@
 
 - [x] Approach to "Exogeneity" of the treatment $\rightarrow$ I need a "suitable" comparison group
 
-- [ ] SUTVA $\rightarrow$ How do I look for Displacement?
+- [ ] SUTVA $\rightarrow$ How do I look for Displacement? Do I need to?
 
 - [ ] Rationalization of "transmission mechanisms" $\rightarrow$ See both possibilities
 
-- [ ] Possibility of reversing the methodology.
-
-- [ ] Issue on
+- [ ] Possibility of reversing the methodology: a crazy-scientist idea.
 
   
+
 
 ## Possibility to increase of sample:
 
@@ -46,18 +47,17 @@ Given I have a decent amount of data regarding the geolocation and characteristi
 | :---------: | ------------------------------------------------------------ | :----------------------------------------------------------- |
 | **Germany** | Work of [Morfed et al](https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0102999) and Wolff (2014) on the effect of LEZ in pollution. Work of Gehrsitz (2017) on LEZ effects in pollution and infant health​.:arrow_right:  ​Clear data on implementation and treatment status, Clear methodologies and estimates to compare when doing $TE_{LEZ \rightarrow pollution}$. + possibly data on vehicle/fleet composition. | More research already done.                                  |
 |             | More unified policies as they are guided by national legislation, reducing unobserved variance in treatment | Less "implementation diversity" to compare the relative effects of policies: If all are the same, I can't compare their effects. |
-|             | LEZ implemented sooner and in higher numbers. More treated, but probably less controls if they are also restricted. | **Foreign language (webpages / legislations / data sources)** |
+|             | LEZ implemented sooner and in higher numbers. More treated, but probably less controls if they are also restricted. | **:exclamation: Foreign language (webpages / legislations / data sources)** |
 |   **UK**    | Known language                                               | LEZ implemented latter (besides London), less information about them. |
-|             | Has additional data on Productivity and Household Income.    |                                                              |
 |   **EU**    | Known language                                               | Less control over data errors/imprefections                  |
 |             | I can be restricted to some of them whom data I trust because I have more to discard. | More cities to consider and thus more data to collect        |
 
-| Condition                  | Germany                                                      | UK                                       |
-| -------------------------- | ------------------------------------------------------------ | ---------------------------------------- |
-| No Interference (SUTVA)    | Yes,to some degree (vehicles Wolff, 2013)                    | No info                                  |
-| Convex Hull                | Not inside, possibly outside                                 | Not inside, possibly outside             |
-| Pre-post intervention info | They start in 2008 or latter                                 | London starts too early (2003) others... |
-| No anticipation            | There is anticipation (vehicle composition from) but maybe not significant to pollution (APO and FLEZ) Wolff, (2013) | No info                                  |
+| Condition                      | Germany                                                      | UK                                       |
+| ------------------------------ | ------------------------------------------------------------ | ---------------------------------------- |
+| **No Interference (SUTVA)**    | Yes,to some degree (vehicles Wolff, 2013), Better explained below. | No info                                  |
+| **Convex Hull**                | Not inside, possibly outside                                 | Not inside, possibly outside             |
+| **Pre-post intervention info** | They start in 2008 or latter                                 | London starts too early (2003) others... |
+| **No anticipation**            | There is anticipation (vehicle composition from). Maybe not significant to pollution (APO and FLEZ), but **probably significant for the Economy **Wolff, (2013) | No info                                  |
 
 #### The German sample:
 
@@ -77,13 +77,13 @@ My statistical units: NUTS (1-3) regions. Some of them are good fit (especially 
 
 I need both but the solutions of one might compromise the other...
 
-#### Exogeneity
+### Exogeneity
 
 * Exogenous distribution of fixed characteristics :arrow_right: NO
   * The synthetic control will take care of that by constructing a control with "the same" characteristics.
-* Only global shocks in study period. The size of the bias increases with the size of idiosyncratic shocks and is reduced by the number of pre-intervention periods. (Abadie, 2019) :arrow_right: **A suitable comparison group**
+* **Only global shocks in study period.** The size of the bias increases with the size of idiosyncratic shocks and is reduced by the number of pre-intervention periods. (Abadie, 2019) :arrow_right: **A suitable comparison group**
 
-#### A suitable comparison group:
+### A suitable comparison group:
 
 Example of possible "Idiosyncratic Shocks": The relative effects of the financial crisis to north-European and south-European countries.
 
@@ -92,19 +92,20 @@ Example of possible "Idiosyncratic Shocks": The relative effects of the financia
 
 ##### Other EU cities that have applied a LEZ and when they did it (Relative size of the comparison group across time)
 
-<img src="C:\Users\aavil\OneDrive\Documentos\A - Estudios\LSE_ASDS\Project\PM2.5\Capstone-Project\Easter situation - Meeting with Raúl 052020.assets\UAR application Europe.png" width="400px" />
+<img src="C:\Users\aavil\OneDrive\Documentos\A - Estudios\LSE_ASDS\Project\PM2.5\Capstone-Project\Easter situation - Meeting with Raúl 052020.assets\UAR application Europe.png" width="600px" />
 
 * There continues to be a sizable amount of controls (who latter become treatments) until 2017 from countries comparable to Germany (France, Belgium, Germany, Switzerland, UK, Germany itself...)
   * _And I still need to add cities that have never been treated, who are also suitable controls_!
+* :heavy_plus_sign: I recently saw I can get the local GDP and similar statistics from Turkey, which Istanbul and Ankara could be good controls to big European cities.
 
-How to have a strong argument against idiosyncratic shocks?
+How to have a strong argument against difference in shocks between treated and control?
 
 * Include a fair number of relevant economic characteristics in the Synthetic Control estimation and test for their balance.
 * To a "Backdating" test, if the Synthetic control accurately predicts the pre-intervention path, it should be credible as a counterfactual.
 * Comparing treated areas with control areas that were treated in later periods as Neumark and Kolko (2010) 
   * *Note: They do not use Synth, they do a FE complex linear regression*
 * Argument theoretically:
-  * The decision is not really optional, it mainly comes from the obligation to comply with the European Commission regulations in air quality, thus self-selection is less likely.
+  * The decision is not completely optional, it mainly comes from the obligation to comply with the European Commission regulations in air quality, thus self-selection is less likely (they can decide HOW to reduce pollution)
   * :bulb: ​Ask Laura Dyett (TFL) on the variables she took into account when applying London's LEZ.
 
 
@@ -127,7 +128,7 @@ Possible spillover effects:
 
 Possible Solutions:
 
-* Only take cities who are 50-100km away from any active LEZ
+* Only take cities who are 50-100km away from any active LEZ (based on Wolff (2013) estimates)
 * Unite the Rhine-Ruhr metropolitan area as an unique city.
 * Backdating and leave-one-out robustness tests
 
@@ -135,7 +136,7 @@ Possible Solutions:
 
 ## Rationalization of transmission mechanisms:
 
-:spiral_notepad: Read more on the mediation literature: (see "Indentify more, observe less" paper)*
+:spiral_notepad: Read more on the mediation literature: (see "Identify more, observe less" paper)*
 
 ### How do I shine light on this network of effects?
 
@@ -207,13 +208,17 @@ stateDiagram
 
 ### 2. Get the mediator effects: Two options  to choose from:
 
+
+
 #### A. Use the methodology from "Identify more, observe less" --> [link](https://www.mendeley.com/reference-manager/reader/bd6a35f1-a6e2-3993-be0d-3dd26b0b3c0f/60cc649b-ae37-f6ef-2ebc-627890c8076a/)
 
-In order to estimate the effect that is mediated by pollution (4): 
+In order to estimate the effect that is mediated by pollution: 
 
 $(2) \frac{dln(GDP)}{d(\gamma_{LEZ\rightarrow Pollution})} = \frac{dln(GDP/WorkingPop)}{d(\gamma_{LEZ\rightarrow Pollution})} + \frac{dln(WorkingPop/WorkingAgePop)}{d(\gamma_{LEZ\rightarrow Pollution})} + \frac{dln(WorkingAgePop/Pop)}{d(\gamma_{LEZ\rightarrow Pollution})} +\frac{dln(Pop)}{d(\gamma_{LEZ\rightarrow Pollution})}, \\ \gamma_{LEZ\rightarrow Pollution} = \frac{dln(Pollution)}{d(LEZ)}$ 
 
 And the one that comes from other causal paths: Equation (1) - Equation (2)
+
+
 
 #### B. Use the estimated effects LEZ into economic output as explanatory variables:
 
@@ -259,7 +264,15 @@ This will summarize the effects on the labor input of GDP, as this is the one wh
 
 With time $t$, unit $i$ and treatment $D \in \{0, 1\}$ and the set of potential outcomes $Y_{it}(D)$ the SCM estimates $\hat{Y}_{it}(D = 0)$ for treated units by creating a synthetic control from a pool of control units. 
 
-:question: Can I create a synthetic treated $\hat{Y}_{it}(D = 1)$ for units that are control from a pool of treated units? Would the same properties apply? Can I use this to estimate the potential effects a given policy would have had?
+:question: Questions:
+
+* Can I create a synthetic treated $\hat{Y}_{it}(D = 1)$ for units that are control from a pool of treated units? 
+* Would the same properties apply? 
+* Can I use this to estimate the potential effects a given policy would have had?
+
+:bulb: Motivation: The case of Hamburg: The second biggest city in Germany but has not applied a LEZ, instead doing other  environmental policies.
+
+I have the documents of all environmental policies applied and the date they were applied, I could create a set of "comparable treated" and use a reverse-SCM in the Hamburg case. I would love to test this new methodology.
 
 
 
@@ -273,11 +286,11 @@ With time $t$, unit $i$ and treatment $D \in \{0, 1\}$ and the set of potential 
       * TFL first-differences approach gives no significant positive or negative results.
       * Just this from **Gehritz (2017)** looks like some preliminary evidence of an increase on unemployment:
 
-    <img src="C:\Users\aavil\OneDrive\Documentos\A - Estudios\LSE_ASDS\Project\PM2.5\Capstone-Project\Easter situation - Meeting with Raúl 052020.assets\Unemployment rates in early and late german adopters.jpg" width="400px" />
+    <img src="C:\Users\aavil\OneDrive\Documentos\A - Estudios\LSE_ASDS\Project\PM2.5\Capstone-Project\Easter situation - Meeting with Raúl 052020.assets\Unemployment rates in early and late german adopters.jpg" width="500px" />
 
     (Early adopters of German LEZ have a relative increase in unemployment relative to late- and never-adopters
 
-    Looks like a 1% difference in unemployment that is bigger than transitory shocks)
+    Looks like a 1% difference (10% increase) in unemployment that is bigger than idiosyncratic shocks)
 * How  convincing it really is? 
   
   * :question:
@@ -315,20 +328,20 @@ With $A_P$ being the application of the policy $P$, and $D$ is a matrix of demog
 
 ## Assumptions of Synth:
 
-+ Non interference between units (Abadie it al 2010, p.494),
-+ Only treated units are exposed to the intervention and they are treated uninterruptedly. ("Synth: an R package" PDF p.3) 
++ **Non interference between units** (Abadie it al 2010, p.494),
++ **Only treated units are exposed to the intervention and they are treated uninterruptedly.** ("Synth: an R package" PDF p.3) 
   + "No region in the pool of potential donor regions can have a similar policy change."
   + "The policy change has no effect before it is enacted. (M. Urban p.3)"
 + "Ideally,  we  would  like  to  construct  a  synthetic  control  that  resembles  the  treated  unit  in all relevant (predictors of outcome) pre-intervention characteristics." ("Synth: an R package" PDF p.3)
   + The set of covariates is usually restricted to variables that are measured before the intervention occurs, but the user could include post-intervention characteristics as long as they are unaffected by the intervention. 
   + Linear combinations  of  pre-intervention  outcomes  can  be  used  to  control  for  unobserved common factors whose effects vary over time.
     + See Abadie et al. (2010)  and "Synth: an R package" for details.
-+ "The values of those variables for the policy region cannot be outside any linear combination of the values for the donor pool. " ("In the convex hull") (Manual Urban)
-+ "Finally, those variables and the outcome must have an approximate linear relationship." (Manual Urban p.)
++ "**The values of those variables for the policy region cannot be outside any linear combination of the values for the donor pool**. " ("In the convex hull") (Manual Urban)
++ "**Finally, those variables and the outcome must have an approximate linear relationship.**" (Manual Urban p.)
 
 ### Tricks / Steps to apply Synth:
 
-STEP 0: Contextual requirements
+**STEP 0:** Contextual requirements
 
 Find data on predictors and outcomes that has sufficient pre-intervention and post-intervention information.
 
@@ -344,7 +357,7 @@ Identify an outcome variable that has a sizable effect and limited volatility (a
     * For example, Amjad et al. (2018) propose singular value thresholding to de-noise data for Synth. (Abadie, 2019)
 * *Time horizon.* The effect of some interventions may take time to emerge or to be of sufficient magnitude to be quantitatively detected in the data. We would need to wait to get more data or use surrogate outcomes or leading indicators. **AB2019 p.26**
 
-STEP 1:  Identify predictors of the outcome variable. Ideally, those predictors have a stable relationship with the outcome variable.
+**STEP 1:**  Identify predictors of the outcome variable. Ideally, those predictors have a stable relationship with the outcome variable.
 
 * Include time variant variables only in some dates and not for the whole period as Abadie et al (2003), and highly encouraged by [paper on this, Kaul and coauthors (2016)](https://ideas.repec.org/p/pra/mprapa/83790.html).
   * Athey and Imbens (2006) even state that including the other covariates rarely matter.
@@ -353,7 +366,7 @@ STEP 1:  Identify predictors of the outcome variable. Ideally, those predictors 
 * "Hahn and Shi (2016) state that studies should have a relatively large number of predictors compared to the number of donor states." (M. Urban p.5)
 * **HOW should I test predictors? some should be lagged?**
 
-STEP 2: Identify the potential donor states that will synthesize the control state.
+**STEP 2:** Identify the potential donor states that will synthesize the control state.
 
 * Because the control state is a contrast to the treated state after treatment, similar policies should not be enacted in any donor pool state in any year during the study. (M. Urban p.5-6 & Abadie (2019))
   * See what would have been the effect if they are included (should be a smaller treatment effect)
@@ -370,12 +383,12 @@ STEP 2: Identify the potential donor states that will synthesize the control sta
 * *Convex hull condition:* Synthetic control estimates are predicated on the idea that a combination of unaffected units can approximate the pre-intervention characteristics of the affected unit. If  the  unit  affected  by  the intervention of interest is “extreme” in the value of a particular variable, such a value may not be closely approximated by a synthetic control **AB2019 p.25** We have to prove this holds.
   * If we have that the outcome variable is "extreme" we can proceed looking at differences $\Delta Y_{it}$, growth rates, or difference to pre-intervention means. (see the effect of this in noise in **AB2019 p25**)
 
-STEP 3: Choose a method for selecting predictor weights (How to reduce overfitting)
+**STEP 3:** Choose a method for selecting predictor weights (How to reduce overfitting)
 
 + The optimal weights will minimize the synthetic’s mean squared prediction error.
 + The cross-validation method shows promise, but currently the standard method is the safer choice.
 
-STEP 4: Assess the pretreatment period goodness of fit of the synthetic control state (generated using the Synth package).
+**STEP 4:** Assess the pretreatment period goodness of fit of the synthetic control state (generated using the Synth package).
 
 * "Synthetic control estimators may be biased if forward looking economic  agents react in advance of the policy intervention" **AB2019 p.23**
   * If there are signs of anticipation, it is advisable to backdate the intervention in the data set to a period before any anticipation effect can be expected, so the full  extent of  the effect of  the intervention can  be estimated.  
@@ -385,7 +398,7 @@ STEP 4: Assess the pretreatment period goodness of fit of the synthetic control 
 * Review state weights to judge similarities between the donor states and the treated state. It can be more important for outcomes of donor states to have a trend similar to that of the treated state than for the states to have a similar average.
 * Review predictor weights to determine the selected predictor variables’ strength in explaining the outcome. (*And look at STEP 0 and how good predictors might help*)
 
-Step 5: Conduct placebo test on states in the donor pool to evaluate the significance of the results for the treated state.
+**Step 5:** Conduct placebo test on states in the donor pool to evaluate the significance of the results for the treated state.
 
 * If the post-treatment difference between the treated state and its synthetic is larger than the difference for most of the placebo states, there is evidence that the treatment had an effect. **MU**
   * Review this, not sure if correct or "abandoned"...
