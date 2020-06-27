@@ -118,10 +118,10 @@ SUTVA requires that the response of a particular unit depends only on the treatm
 
 Possible spillover effects:
 
-* **Contagion/Signaling**: A LEZ in a big city makes the fleet of cars change and thus all their neighboring cities will have part of their fleet changed
-* **Anticipation**: LEZ zones are advertised before application to give some time to change fleet so the effects might be seen before application or the timing of effects might not be perfect.
+* **Contagion/Signaling**: A LEZ in a big city **makes** the fleet of cars change and thus all their neighboring cities will have part of their fleet changed
+* **Anticipation**: LEZ zones **are** advertised before application to give some time to change fleet so the effects might be seen before application or the timing of effects might not be perfect.
   * :bulb: Both are partially solved by **Wolff (2015)** an **Gehritz (2017)**, but can be reviewed if I have the data on cars from Wolff and solved with backdating.
-* **Displacement**: If a very strong LEZ displaces business to "control" cities, the ATE on GDP, employment, ... would be biased. Does not make much sense if almost all of them will apply a LEZ soon.
+* **Displacement**: If a very strong LEZ displaces business to "control" cities, the ATE on GDP, employment, ... would be biased. Does not make much sense if almost all of them will apply a LEZ soon, but it is possible.
   * :question: How can I test, discard or argument that it is not economically significant? 
     * Especially for the city of Hamburg that has NOT applied any LEZ. 
     * :bulb: Maybe I need to do tests with and without Hamburg as a control observation.
@@ -270,7 +270,7 @@ With time $t$, unit $i$ and treatment $D \in \{0, 1\}$ and the set of potential 
 * Would the same properties apply? 
 * Can I use this to estimate the potential effects a given policy would have had?
 
-:bulb: Motivation: The case of Hamburg: The second biggest city in Germany but has not applied a LEZ, instead doing other  environmental policies.
+:bulb: Motivation: The case of Hamburg: The second biggest city in Germany but has not applied a LEZ, instead doing other environmental policies.
 
 I have the documents of all environmental policies applied and the date they were applied, I could create a set of "comparable treated" and use a reverse-SCM in the Hamburg case. I would love to test this new methodology.
 
@@ -280,7 +280,7 @@ I have the documents of all environmental policies applied and the date they wer
 
 * Possible flaws? 
   * Is this a sizable effect? (2 effects in the economy: positive and negative)
-    * **Positive**: Reduction of pollution: $TE_{LEZ\rightarrow Pollution}$ -0.67 to -1.3$\mu g/m^3$ (Gherritz 2017), which translates to a close-to-1% reduction in GDP according to Dechezlepêtre.
+    * **Positive**: Reduction of pollution: $TE_{LEZ\rightarrow Pollution}$ -0.67 to -1.3$\mu g/m^3$ (Gherritz 2017), which translates to a close-to-1% reduction in GDP according to Dechezlepêtre (2020).
     * **Negative**.
       * Very discussed study gives a 7% decrease in costumers in the city center (Germany).
       * TFL first-differences approach gives no significant positive or negative results.
@@ -352,14 +352,14 @@ Find data on predictors and outcomes that has sufficient pre-intervention and po
 Identify an outcome variable that has a sizable effect and limited volatility (and a close time horizon).
 
 * "The nature of this exercise, which focuses on a single treated unit or on a small number of treated units, indicates that small effects will be indistinguishable from other shocks to the outcome of the affected unit, especially if the outcome variable of interest is highly volatile" **(Abadie, 2019)**
-  * High volatility elevates the risk of volatility **(Abadie 2019, p. 22)**
+  * High volatility elevates the risk of *volatility* **(Abadie 2019, p. 22)**
   * This can be reduced by averaging and by "filtering both the treated and control units" before Synth.
     * For example, Amjad et al. (2018) propose singular value thresholding to de-noise data for Synth. (Abadie, 2019)
 * *Time horizon.* The effect of some interventions may take time to emerge or to be of sufficient magnitude to be quantitatively detected in the data. We would need to wait to get more data or use surrogate outcomes or leading indicators. **AB2019 p.26**
 
 **STEP 1:**  Identify predictors of the outcome variable. Ideally, those predictors have a stable relationship with the outcome variable.
 
-* Include time variant variables only in some dates and not for the whole period as Abadie et al (2003), and highly encouraged by [paper on this, Kaul and coauthors (2016)](https://ideas.repec.org/p/pra/mprapa/83790.html).
+* Include time variant variables only in some dates and not for the whole period  - as Abadie et al (2003), and highly encouraged by [paper on this, Kaul and coauthors (2016)](https://ideas.repec.org/p/pra/mprapa/83790.html) - 
   * Athey and Imbens (2006) even state that including the other covariates rarely matter.
   * Kaul and coauthors (2016) also point out that if the other predictors help predict the outcome, omitting them can bias the synthetic regions’ outcome in the posttreatment period. They suggest using either an average of the outcome across all pretreatment years or the last year of the pretreatment period. 
   * Ferman, Pinto, and Possebom (2016) recommend that analysts try several different sets of lags and report the results from all of them. 
