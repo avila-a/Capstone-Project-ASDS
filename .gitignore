@@ -1,0 +1,18 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+0ld/
+data/arcgis/
+data/congestion data/
+data/Deaths by age group, sex, week and NUTS 3 region (demo_r_mweek3).pdf
+data/eurostat/
+data/France data/
+data/Greenzonesapp/
+data/NUTS3/
+data/pollution/
+data/vehicles_registrations/
+data/public_exp/
+past git/
+*.rar
+data/lez_data2/

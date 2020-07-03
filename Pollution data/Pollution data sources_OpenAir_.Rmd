@@ -1,0 +1,228 @@
+---
+title: "Pollution data Sources"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r message=FALSE, warning=FALSE}
+# install.packages("openair")
+library(tidyverse)
+
+knitr::opts_chunk$set(echo = FALSE, message=FALSE, warning=FALSE,
+                      fig.align = 'center')
+```
+
+## OpenAir
+
+### Importing data
+
+```{r}
+library("openair")
+
+# Import data from UK
+kc1 <- importAURN(site = "kc1", year = 2011:2012, meta = TRUE) #to_narrow -> tidy
+summary(kc1)
+# ?importAURN
+
+# Welsh and Scottish Air Quality Network Data Import For Openair
+# ?importWAQN()
+# ?importSAQN()
+
+# Import from Europe
+# ?openair::importEurope # codes from https://github.com/skgrange/saqgetr
+stuttgart <- importEurope("debw118", year = 2010:2019, meta = TRUE)
+```
+
+### First manipulations
+
+```{r}
+# Create time averages
+sub2 <- timeAverage(kc1, avg.time = "2 week")
+# Summary statistics by pollutant and time
+aqStats(selectByDate(mydata, year = 2004), pollutant = "no2")
+
+summaryPlot(mydata)
+```
+
+### Visualizations
+
+```{r}
+# Visualizations
+
+timePlot(kc1)
+trendLevel(kc1)
+windRose(kc1)
+calendarPlot(kc1)
+polarPlot(kc1)
+polarCluster(
+  mydata,
+  pollutant = "nox",
+  x = "ws",
+  wd = "wd")
+```
+
+More tools:
+(mainly how to find the codes of stations https://www.rdocumentation.org/packages/openair/versions/2.1-0/topics/airbaseFindCode)
+
+```{r}
+# sites <- airbaseFindCode(country = c("DE", "GB"), site.type = "background")
+
+
+# Import pre-calculated HYSPLIT 96-hour back trajectories
+traj <- importTraj(site = "london")
+
+position <- traj %>%
+  group_by(lat, lon) %>%
+  summarise_all(first)
+summary(traj)
+```
+
+
+```{r}
+# Manipulation:
+
+splitted <- splitByDate(
+  mydata,
+  dates = "1/1/2003",
+  labels = c("before", "after"),
+  name = "split.by" # New variable creadted with the labels
+)
+
+smoothTrend(mydata)
+
+linearRelation(
+  mydata,
+  x = "nox",
+  y = "no2")
+```
+
+
+```{r}
+# install.packages("saqgetr")
+library(saqgetr) # https://github.com/skgrange/saqgetr
+library(leaflet)
+
+# Import site information
+data_sites <- get_saq_sites() 
+data_sites_na <- data_sites %>% drop_na() # I am dropping some observations!
+
+data_sites %>%
+  transmute_if(is.character, as.factor) %>% summary()
+summary(data_sites)
+# Glimpse tibble
+glimpse(data_sites)
+
+
+# Get processes (more detail of each process happening in each site)
+data_processes <- get_saq_processes()
+data_processes %>% summary()
+
+# The ones with most measurements
+data_processes %>% select(variable_long) %>% table() %>% sort() %>% tail(20)
+data_processes %>% select(variable) %>% 
+  table() %>% sort() %>% tail(16) %>% names() -> polutants
+
+# Get only the relevant sites (only those that have the most common pollutants)
+data_processes %>%
+  filter(variable %in% polutants) %>%
+  select(site) %>%
+  unique() -> l_relevent_sites
+
+data_sites %>%
+  filter(site %in% l_relevent_sites[[1]]) %>%
+  unique() %>%
+  nrow()
+data_sites %>% head()
+```
+
+Know it with the plot 
+
+```{r}
+# Some idea of the density of the points:
+leaflet()  %>% addTiles() %>% 
+  addMarkers(lng = data_sites$longitude[1:1000], 
+             lat = data_sites$latitude[1:1000])
+# clusterOptions = markerClusterOptions()
+
+# ## --> Try to get a faster one
+pts = st_as_sf(drop_na(data_sites), coords = c("longitude", "latitude"), crs = 4326)
+
+# Some idea of the density of the points:
+
+categories <- pts$site_area %>% unique()
+categories
+
+pal <- colorFactor(c("black", "yellow", "navy", "white", "red", "purple"), domain = categories)
+pal
+
+leaflet(data = pts)  %>% addTiles() %>%
+  addCircleMarkers(
+    radius = 4,
+    color = ~pal(site_area),
+    stroke = FALSE, 
+    fillOpacity = 0.5
+  ) # addGlPoints
+
+pts %>% head()
+
+
+```
+
+
+```{r}
+# Get Observations
+
+# ?get_saq_observations # Valid only?, Which time zone?
+
+data_ex <- get_saq_observations(
+  site = c("gb0036r", "gb0682a"), 
+  start = 1990, # Optional
+  end = 2000,
+  verbose = TRUE
+)
+summary(data_ex) #
+glimpse(data_ex)
+# table(data_ex$variable)
+
+data_ex_hourly <- data_ex %>% 
+  saq_clean_observations(summary = "day", valid_only = TRUE)
+summary(data_ex_hourly)
+```
+
+
+Are the ID of the sites from the UK the same in `saqgettr` and `openair` ? -> I could get better data from openair from the list of `saqgettr`
+
+### Get the annual mean for all stations and all stations
+
+```{r}
+
+data_annual <- get_saq_simple_summaries(summary = "annual_mean") # Also monthly_means
+data_y <- data_annual %>% 
+  select(date, date_end, site, variable, count, value) %>%
+  left_join(data_sites, by = "site") %>%
+  select(-c("eu_code", "eoi_code", "data_source", "network"))
+
+head(data_y)
+
+# I need to check it has the data that I want ()
+
+# data_y %>% pivot_wider(names_from = variable, values_from = value)
+
+data_y %>% filter(variable == "wd")
+# ? get_saq_simple_summaries
+
+# Validity integers (explanation)
+data_validity_integers <- get_saq_validity() %>% 
+  print(n = Inf)
+```
+
+Other soruces of info:
+* Look at both Excel and notebook
+* Satelite data NASA and estimations
+
+
+Other packages:
+* ggopenair -> openair with ggplot
+* deweather -> an R package to remove meteorological variation from air quality data
+* worldmet  -> R package for accessing NOAA Integrated Surface Database (ISD) meteorological observations.

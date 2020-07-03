@@ -2,51 +2,210 @@
 title: "Analysis LEZ"
 author: '41783'
 date: "25/02/2020"
-output: html_document
+output: 
+  html_notebook:
+    code_folding: show
+    # keep_md: true
+    df_print: paged
 ---
 
+Basic configuration and loading of packages:
+
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+# rm(list = ls())
+knitr::opts_chunk$set(
+  echo = TRUE, 
+  fig.align = "center",
+  out.width = '80%'
+)
 ```
 
 ```{r message=FALSE, warning=FALSE}
 # library(jsonlite)
 library(tidyverse)
 library(rvest)
-library(sf)
+
+library(sf) # Geo analysis
 library("rgdal")
-library(DBI)
+
+library(DBI) # SQL db
+
+library(panelView)
+library(lubridate)
 ```
 
+
+## Index of contents
+
+* Read data from pre-processing
+  + Nuts regions geographies
+  + data from capstone_db
+    * nuts_time (outcomes, controls and mediators)
+    * treatment from Umweltzonen
+* Do explorative analysis on the volatility of outcomes
+* Create variables of interest
+* Do analysis
+
+
+
+
+## Read data from pre-processing:
+
+### Nuts Regions geographies 
+
+> to do: # Rural or not?
+
 ```{r}
-nuts.sf <- readOGR("data", "nuts_sf")
+# Characteristics of nuts3:
 
-nuts.sf@data <- nuts.sf@data %>%
-  mutate(NUTS_NAME = NUTS_NAME %>% as.character(),
-         min_time = as.Date(min_time))
-Encoding(nuts.sf@data$NUTS_NAME) <- "UTF-8"
+nuts.sf <- read_sf("data/nuts_sf")
 
-# Convert to sf-objects
-nuts.sf <- st_as_sf(nuts.sf)
-
+nuts.sf <- nuts.sf %>%
+  dplyr::rename(
+    geo = NUTS_ID,
+    nuts_level = LEVL_CODE,
+    country = CNTR_CODE,
+    nuts_name = NUTS_NAME,
+    min_time_gz = min_time
+  ) %>% # Create a "never treated" and "always treated" variable
+  mutate(
+    appl_never = ifelse(appl_uar == 0 & appl_gz == 0, 1, 0),
+    appl_sure = appl_uar*appl_gz,
+    min_year_gz = as.character(min_time_gz) %>% 
+           substr(1,4) %>% as.numeric() # year
+  )
 
 nuts.sf %>% as.data.frame() %>% head()
 ```
 
+### Get data from SQLdb:
+
+```{r}
+db <- dbConnect(RSQLite::SQLite(), "data/capstonedb")
+dbListTables(db)
+```
+
+Tables:
+
+* airq_plans: List of (new) air quality plans
+* nuts3: NUTS code, name and attainment status according to UAR and GZ, and minimum year for GZ
+* umweltzonen: Treatment status of all zones in germany for each status with timing.
+* nuts_time statistical data on NUTS regions (outcomes and controls)
+
+#### Get nuts_time (outcomes, mediators and controls)
+
+```{r}
+dta <- dbGetQuery(db, "SELECT * from nuts_time")
+dta %>% head()
+```
+
+Create variables of interest (outcomes and controls)
+(and possibly a restricted dataset only with those)
+
+```{r}
+## (for NUTS2)
+
+### outcomes:
+# hours worked per person (abseentism/temporality)
+# (waiting to get data on hours)
+
+# wages per person
+# (waiting to get data on wages)
+
+# wage/hour worked
+
+### Controls: 
+
+# Investment/capita (nuts 2)
+# Educational level/capita (nuts 2)
+# Dependency ratio (NUTS 2)
+# Share of men/women in the labor market
+
+## (for NUTS 3)
+
+### Outcomes:
+# Rate of employment (with active population or range of "active" years)
+dta %>%
+  mutate(empl_r_total = empl_TOTAL/pop_15_64)
+
+
+# Proportion of working age population
+
+# Dependency rate
+
+### Controls
+# mean age
+# mortality and birth rate
+
+dta %>% names()
+ # others to do GDP and Productivity: GDP/capita, Investment/capita, wage levels, 
+```
+
+
+
+#### Get treatment from umweltzonen
+
+```{r}
+umweltzonen <- dbGetQuery(db, "SELECT * from umweltzonen")
+umweltzonen %>% head()
+umweltzonen %>% dim()
+```
+
+
+### Small analysis of the volatility of data:
+
+```{r}
+get_volatility <- function(data = dta, 
+                           CNTR_CODE = "DE", 
+                           time_vector = 2000:2019,
+                           variable = "gdp_eur_hab",
+                           cluster_differences = "nuts1" # can be "country"
+){
+  temp <- data %>%
+    arrange(geo, time) %>%
+    dplyr::mutate(nuts1 = substr(geo, 3, 4),
+           country = substr(geo, 1, 2)) %>%
+    filter(
+      country == CNTR_CODE,
+      # !is.element(time, c(2008, 2009, 2010, 2011)),
+    ) %>%
+    dplyr::group_by(geo) %>%
+    dplyr::mutate(perc_change_unit = (eval(parse(text=variable))-lag(eval(parse(text=variable))))/lag(eval(parse(text=variable)))*100) %>%
+    ungroup() %>%
+    dplyr::group_by("nuts1", time) %>%
+    dplyr::mutate(mean_change_group = mean(perc_change_unit, na.rm = TRUE),
+           perc_change_dev = perc_change_unit - mean_change_group) %>%
+    ungroup() %>%
+    select(geo, time, variable, mean_change_group, perc_change_unit, perc_change_dev)
+  print(temp %>% summary)
+  return(temp)
+}
+```
+
+
+```{r}
+temp <- get_volatility(data = dta, CNTR_CODE = "DE",
+                       time_vector = 2000:2019,
+                       variable = "unempR_T")
+dta %>% names()
+# pop_total, empl_EMP_TOTAL, inv_TOTAL, wages_TOTAL, mean_pol, 
+```
+
+
 ### Data from Eurostat:
 
 ```{r}
-# emp <- read.csv(file = "data/eurostat_employment.csv")
-gdp <- read.csv(file = "data/eurostat_gdp_complete.csv")
+gdp <- dbGetQuery(db, "SELECT geo, time, gdp_eur_hab
+                  FROM nuts_time")
 
 gdp %>% summary
 # emp %>% summary
 
 gdp_wide <- gdp %>% 
-  filter(unit == "MIO_EUR") %>%
-  select(values, geo, time) %>%
-  pivot_wider(names_from = time, values_from = values)
-gdp_wide
+  select(gdp_eur_hab, geo, time) %>%
+  pivot_wider(names_from = time, values_from = gdp_eur_hab)
+
+gdp_wide %>% head(100)
 
 
 # emp_wide <- emp %>% 
@@ -61,22 +220,224 @@ length(unique(nuts.sf$NUTS_ID))
 
 
 nuts.sf.data <- nuts.sf %>%
-  left_join(emp_wide, by = c("NUTS_ID" = "geo")) %>%
-  left_join(gdp_wide, by = c("NUTS_ID" = "geo"))
+  # left_join(emp_wide, by = c("NUTS_ID" = "geo")) %>%
+  left_join(gdp_wide, by = c("geo" = "geo"))
 
 # Which cities do I have data of?
 nuts.sf.data %>% as.data.frame() %>%
   filter(is.na(`2001`) == FALSE) %>%
-  select(CNTR_CODE) %>%
+  select(country) %>%
   table()
 # NO DATA OF: AL, Switzerland/CH, IS, LI, ME, NO, RS, TR
 
 plot(nuts.sf.data["2016"], 
      xlim = c(0, 20), ylim = c(30, 70))
 
-nuts.sf.data %>% as.data.frame()
+nuts.sf.data %>% as.data.frame() %>% head(100)
 ```
 
+
+
+
+```{r}
+temp <- dta %>%
+  mutate(nuts1 = substr(geo, 3, 4),
+         country = substr(geo, 1, 2)) %>%
+  filter(
+    country == "DE",
+    !is.element(time, c(2008, 2009, 2010, 2011)),
+  ) %>%
+  group_by(geo) %>%
+  mutate(perc_change = (gdp_eur_hab/lag(gdp_eur_hab)-1)*100) %>%
+  ungroup() %>%
+  group_by(nuts1, time) %>%
+  mutate(mean_change = mean(perc_change, na.rm = TRUE),
+         perc_change_dev = perc_change - mean_change)
+  
+deviations_ger <- gdp_de %>%
+  select(gdp_eur_hab, geo, time) %>%
+  # filter(!is.element(time,c(2008, 2009, 2010, 2011))) %>%
+  mutate(nuts1 = substr(geo, 3, 4),
+         country = substr(geo, 1, 2)) %>%
+  group_by(geo) %>%
+  mutate(perc_change = (gdp_eur_hab/lag(gdp_eur_hab)-1)*100) %>%
+  ungroup() %>%
+  group_by(nuts1, time) %>%
+  mutate(mean_change = mean(perc_change, na.rm = TRUE),
+         perc_change_dev = perc_change - mean_change)
+
+temp$perc_change_dev %>% hist(breaks = 1000, xlim = c(-10,10))
+temp$perc_change_dev %>% summary()
+```
+
+
+
+### Small analysis of the volatility of the GDP data:
+
+For the whole dataset:
+
+```{r}
+gdp %>%
+  select(gdp_eur_hab, geo, time) %>%
+  arrange(geo,time) %>%
+  mutate(country = substr(geo, 1, 2)) %>%
+  group_by(geo) %>%
+  mutate(perc_change = (gdp_eur_hab/lag(gdp_eur_hab)-1)*100) %>%
+  ggplot(aes(x = time, y = perc_change, fill = geo, colour = country)) +
+           geom_line(alpha = 0.05) +
+  guides(fill = FALSE) +
+  # theme(legend.position = "none") +
+  ylim(-30, +30)
+```
+
+For german cities
+```{r}
+# gdp_wide2 <- gdp_wide %>% 
+#   select(-geo)
+# rownames(gdp_wide2) <- gdp_wide$geo
+# gdp_wide2 <- as.data.frame(t(gdp_wide2)) %>%
+#   mutate(year = rownames(t(gdp_wide2))) %>%
+#   arrange(year)
+
+gdp_de <- gdp %>% filter(substr(geo, 1,2) == "DE")
+
+deviations_ger <- gdp_de %>%
+  select(gdp_eur_hab, geo, time) %>%
+  # filter(!is.element(time,c(2008, 2009, 2010, 2011))) %>%
+  mutate(nuts1 = substr(geo, 3, 4),
+         country = substr(geo, 1, 2)) %>%
+  group_by(geo) %>%
+  mutate(perc_change = (gdp_eur_hab/lag(gdp_eur_hab)-1)*100) %>%
+  ungroup() %>%
+  group_by(nuts1, time) %>%
+  mutate(mean_change = mean(perc_change, na.rm = TRUE),
+         perc_change_dev = perc_change - mean_change)
+
+deviations_ger$perc_change_dev %>% hist(breaks = 100, xlim = c(-10,10))
+deviations_ger$perc_change_dev %>% summary()
+deviations_ger
+```
+
+
+```{r}
+ggplot(data = deviations_ger, 
+       aes(x = time, y = perc_change_dev, fill = geo, colour = nuts1)) +
+           geom_line(alpha = 0.1) +
+  guides(fill = FALSE) +
+  # theme(legend.position = "none") +
+  ylim(-15, +15)
+
+# gdp_de_avg <- gdp_de
+# wnF=arima(g, order=c(1,0,0), 
+#           seasonal = ,
+#           xreg = ,)
+# wnF$residuals
+```
+
+For London boroughs
+```{r}
+london_boroughs <- c(paste0("UKI", seq(31,45))) # UKI31 - UKI45
+
+# How much lonfong borougs gdp varies year to year
+gdp_london_boroughs <- gdp %>%
+  select(gdp_eur_hab, geo, time) %>%
+  filter(geo %in% london_boroughs) %>%
+  group_by(geo) %>%
+  mutate(perc_change = (gdp_eur_hab/lag(gdp_eur_hab)-1)*100) %>%
+  filter(time > 2000 & time < 2017)
+
+ggplot(data = gdp_london_boroughs, aes(x = time, y = perc_change, colour = geo)) +
+  geom_line()
+
+# How does the whole NUTS3 regions gdp varie?
+mean_gdp_change <- gdp %>%
+  select(gdp_eur_hab, geo, time) %>%
+  group_by(geo) %>%
+  mutate(perc_change = (gdp_eur_hab/lag(gdp_eur_hab)-1)*100) %>%
+  ungroup() %>%
+  # dplyr::group_by(time) %>%
+  summarise(mean_perc_change = mean(perc_change, na.rm = TRUE))
+  # filter(time > 2000,
+  #        time < 2017)
+mean_gdp_change
+
+# What is the difference between both? (a higher bound of london's unit specific factors volatility - Would be better with only cities)
+
+gdp_london_boroughs %>%
+  left_join(mean_gdp_change) %>%
+  mutate(clean_change = perc_change - mean_perc_change) %>%
+  group_by(time) %>%
+  summarise(mean_diff_change = mean(clean_change, na.rm = TRUE)) 
+
+```
+
+Final comment: Although the variablitity is quite high at the beguinning we can see that most of it is systemic and will be taken into account by the controls in Synth. The higher bound of this volatility is between 1 and 4% change a year.
+
+### Small analysis of the application of LEZ zones in Germany:
+
+```{r}
+umweltzonen <- dbGetQuery(db, "SELECT * from umweltzonen")
+umweltzonen %>% head()
+umweltzonen %>% dim()
+```
+
+```{r}
+um <- umweltzonen %>%
+  mutate(Stage_1 = as.Date(Stage_1, "%d.%m.%Y"),
+         Stage_2 = as.Date(Stage_2, "%d.%m.%Y"),
+         Stage_3 = as.Date(Stage_3, "%d.%m.%Y"))
+
+all <- expand.grid(LEZ = um$LEZ, 
+                   year = seq(2008, 2020),
+                   month = seq(01, 12), 
+                   # month = c("01", "02", "03", "04", "05", "06",
+                   #          "07", "08", "09", "10", "11", "12"), 
+                   stringsAsFactors = FALSE)
+
+panel_zones <- all %>%
+  left_join(um) %>%
+  mutate(date = as.POSIXct(paste0(year,"-", month, "-01" )),
+         # LEZ = substr(LEZ, 1, 24),
+         LEZ = sub(" *\\(.*", "", LEZ), # Everything until a "("
+         status = ifelse(date < Stage_1, 0,
+                          if_else(date < Stage_2, 1, 
+                                  if_else(date < Stage_3, 2, 3, 
+                                          missing = 2)))
+         # date_factor = paste0(year(date), "-", ifelse(
+         #   month(date)<9, paste0("0", month(date)), month(date))),
+         ) %>%
+  arrange(Stage_3) %>%
+  arrange(Stage_2) %>%
+  arrange(Stage_1) %>%
+  mutate(LEZ_factor = fct_inorder(LEZ)) %>%
+  select(LEZ, date, status, year, month, LEZ_factor)
+panel_zones
+```
+
+
+
+```{r, fig.height=8, fig.width= 9}
+# png(filename = "LEZ application germany.png", 
+#     width = 750, height = 1000, res = 100)
+panelView(month ~ status, data = panel_zones, 
+          index = c("LEZ_factor", "date"), 
+          by.timing = TRUE, 
+          axis.lab.gap = c(23,0), 
+          # axis.lab = "time",
+          background = "white",
+          main = "",
+          xlab = "", ylab = "", pre.post = TRUE,
+          legend.labs = c("No LEZ applied", 
+                          "Only red, yellow or green sticker", 
+                          "Only yellow or green sticker", "Only green stiker"),
+          color = c("grey90", "red1", "yellow1", "green4"))
+# dev.off()
+
+# devtools::install_github('xuyiqing/panelView')
+# RColorBrewer::brewer.pal.info
+```
+
+(Image saved in png file)
 
 ### Data from Pollution:
 
@@ -118,10 +479,15 @@ data %>% head()
 ## Start of the model:
 
 packages: 
+
 * synth - synthetic control method (SCM)
 * gsynth - generalized SCM http://yiqingxu.org/software/gsynth/gsynth_examples.html (VERY USEFULL + paper + useful lectues on Synthetic control methods)
 * tjbal - trajectoy balancing
 * panelView - visualizing panel data
+* MSCMT - Inclusion of time series and "correct" cross-validating techniques https://cran.r-project.org/web/packages/MSCMT/vignettes/WorkingWithMSCMT.html (various explanations and examples)
+* Microsynth: Not very complex but highly interesting permutation based confidence intervals https://cran.r-project.org/web/packages/microsynth/vignettes/introduction.html
+<!-- synth_runner in STATA -->
+
 review of methodologies: https://www.nber.org/papers/w22791
 
 ```{r}
@@ -184,21 +550,19 @@ panelView(gdp_eur_hab_norm ~ treat_gz + gva_A + gva_B_E +
 #           axis.adjust = TRUE,
 #           type = "outcome")
 data_synth_c %>% head()
-  
 ```
-
-
-
 # Synthetic control method:
+
+* ! Note: 
+* ! This is being done with fake treatment groups that are really controls because the area was not taken into account.
+* !
 
 ```{r}
 # install.packages("Synth")
 library(Synth)
-data(basque)
-basque
-?basque
-basque
-?Synth::dataprep()
+# data(basque)
+# basque
+# ?Synth::dataprep()
 # Synth::dataprep(foo = nuts_try, 
 #                 predictors = values, # This is wrong
 #                 dependent = values,
@@ -206,14 +570,13 @@ basque
 #                 time.variable = time,
 #                 treatment.identifier = "HR043",
 #                 )
-nuts_try
+# nuts_try
 ```
 
 http://yiqingxu.org/teaching/17802/synth.pdf
 https://www.stata.com/meeting/uk17/slides/uk17_Cerulli.pdf
 https://blogs.worldbank.org/impactevaluations/evaluating-regulatory-reforms-using-the-synthetic-control-method
 https://jech.bmj.com/content/72/8/673
-
 
 
 # Generalized Synthetic control method:
@@ -226,12 +589,12 @@ data(gsynth)
 # turnout
 # simdata
 
-out <- gsynth(Y ~ D + X1 + X2, data = simdata, 
-              index = c("id","time"), 
-              force = "two-way", CV = TRUE, 
-              r = c(0, 5), se = TRUE, 
-              inference = "parametric", nboots = 1000, 
-              parallel = FALSE)
+# out <- gsynth(Y ~ D + X1 + X2, data = simdata, 
+#               index = c("id","time"), 
+#               force = "two-way", CV = TRUE, 
+#               r = c(0, 5), se = TRUE, 
+#               inference = "parametric", nboots = 1000, 
+#               parallel = FALSE)
 
 out2 <- gsynth(gdp_eur_hab ~ treat_gz + gva_A + gva_B_E + 
             gva_F + gva_G_I + gva_J + gva_K + gva_L + 
@@ -242,7 +605,7 @@ out2 <- gsynth(gdp_eur_hab ~ treat_gz + gva_A + gva_B_E +
               r = c(0, 4), # an integer specifying the number of factors. If CV = TRUE, the cross validation procedure will select the optimal number of factors from r to 5.
               se = TRUE, 
               # EM = TRUE, # Gobillon and Magnac (takes a lot of time)
-              inference = "parametric", nboots = 500, 
+              inference = "parametric", nboots = 100,  #500
               parallel = TRUE,
               min.T0 = 6) # Has to be larger than r.max+1
 
@@ -251,9 +614,12 @@ out2 <- gsynth(gdp_eur_hab ~ treat_gz + gva_A + gva_B_E +
 # NOTE: I need to correct from assigning treatment by a point to assygn treatment by the area. If not, some NUTS3 in Paris and London will be counted as controls! 
 # They should eather be treated or cease to be controls [ ]
 # !!!
+```
 
-?gsynth
 
+
+
+```{r}
 out2 %>% print()
 out2$est.att
 out2$est.avg
@@ -279,6 +645,10 @@ all_treat_effects %>%
 all_treat_effects
 ```
 
+_Questions:_ 
+
+* What is the CV procedure of gsynth?
+* What is the bootstraping procedure of gsynth?
 
 ```{r}
 # out2$est.co$residuals %>% as.data.frame()
@@ -335,9 +705,28 @@ _NOTE_: The files are encrypted, I need to deencrip them before. C#.
 ### Good info on spatial analysis:
 https://mgimond.github.io/Spatial/uncertainty-in-census-data.html
 
+### Fast and reliable computation of generalized synthetic controls (MSCMT package)
+(look at Mendelay paper and to https://cran.r-project.org/web/packages/MSCMT/index.html)
+
 ### New methodologies (2019) on multiple timing and periods DiD:
 https://andrewcbaker.netlify.com/2019/09/25/difference-in-differences-methodology/
 
+### Abadie and L'Hour code for SCM with penalization for interpolation biases:
+
+https://github.com/jlhourENSAE/regsynth
+
+### RNN - based methods: Predict the synthetic control with NN:
+https://ideas.repec.org/p/arx/papers/1712.03553.html
+
+### "CausalInference" the Google made package to estimate Bayesian Structural Time Series Models:
+https://google.github.io/CausalImpact/
+
+### Critiques to synth methods with CV if done improperly:
+- Look at Mendeley biblography on 04/2020
+
+### Non-parametric Synth (Italian researcher - on STATA)
+https://ideas.repec.org/c/boc/bocode/s458398.html
+https://www.sciencedirect.com/science/article/pii/S0165176519301788?entityID=https%3A%2F%2Flse.ac.uk%2Fidp&pes=vor 
 
 ## Similar analysis with code and other methodologies: (to read and review)
 https://andrewcbaker.netlify.com/2020/01/01/what-can-we-say-about-medical-marijuana-and-opioid-overdose-mortality/

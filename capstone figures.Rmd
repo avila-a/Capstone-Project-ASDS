@@ -1,0 +1,85 @@
+---
+title: "Figures Capstone"
+author: '41783'
+date: "25/02/2020"
+output: 
+  html_notebook:
+    code_folding: show
+    # keep_md: true
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+# rm(list = ls())
+knitr::opts_chunk$set(
+  echo = TRUE, 
+  fig.align = "center",
+  out.width = '80%'
+)
+```
+
+```{r message=FALSE, warning=FALSE}
+# library(jsonlite)
+library(tidyverse)
+library(rvest)
+
+library(sf) # Geo analysis
+library("rgdal")
+
+library(DBI) # SQL db
+
+library(panelView)
+library(lubridate)
+```
+
+## Index of contents
+
+* 
+
+### Data from Eurostat:
+
+```{r}
+db <- dbConnect(RSQLite::SQLite(), "data/capstonedb")
+dbListTables(db)
+
+gdp <- dbGetQuery(db, "SELECT geo, time, gdp_eur_hab
+                  FROM nuts_time")
+
+gdp %>% summary
+# emp %>% summary
+
+gdp_wide <- gdp %>% 
+  select(gdp_eur_hab, geo, time) %>%
+  pivot_wider(names_from = time, values_from = gdp_eur_hab)
+
+gdp_wide %>% head(100)
+
+
+# emp_wide <- emp %>% 
+#   filter(time == 2017,
+#          wstat == "Employed persons") %>%
+#   select(nace_r2, values, geo) %>%
+#   pivot_wider(names_from = nace_r2, values_from = values)
+
+# Why aren't they of the same length? ¿is it turkey?
+length(unique(gdp$geo))
+length(unique(nuts.sf$NUTS_ID))
+
+
+nuts.sf.data <- nuts.sf %>%
+  # left_join(emp_wide, by = c("NUTS_ID" = "geo")) %>%
+  left_join(gdp_wide, by = c("geo" = "geo"))
+
+# Which cities do I have data of?
+nuts.sf.data %>% as.data.frame() %>%
+  filter(is.na(`2001`) == FALSE) %>%
+  select(country) %>%
+  table()
+# NO DATA OF: AL, Switzerland/CH, IS, LI, ME, NO, RS, TR
+
+plot(nuts.sf.data["2016"], 
+     xlim = c(0, 20), ylim = c(30, 70))
+
+nuts.sf.data %>% as.data.frame() %>% head(100)
+```
+

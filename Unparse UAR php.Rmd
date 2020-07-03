@@ -2,7 +2,11 @@
 title: "Get data from GZ and UAR and unite the rest:"
 author: "Antonio Avila"
 date: "06/02/2020"
-output: html_document
+output: 
+  html_notebook:
+    code_folding: show
+    # keep_md: true
+    df_print: paged
 ---
 
 ```{r setup, include=FALSE}
@@ -250,12 +254,19 @@ gzones_sp_pol <- SpatialPolygonsDataFrame(sps,
 # }
 
 # New Leaflet map
+library(leaflet)
+library(htmlwidgets)
+
 col_map <- c("red", "blue", "green")
 col_size <- c(4,3,1,2)
 
-leaflet() %>% 
+policy_map <- leaflet() %>% 
   addTiles() %>% 
-  addPolygons(data = NUTS3_16) %>%
+  addPolygons(data = NUTS3_16,
+              color = "black",
+              weight = 1,
+              # opacity = NA,
+              fill = NA) %>%
   addPolygons(
     data = gzones_sp_pol,
     popup = paste0("<b> Name: </b>", gzones_sp_pol$KML,  
@@ -273,6 +284,11 @@ leaflet() %>%
                    "<b> Scheme: </b>", uar_sp$scheme, "<br/>",
                    "<b> Source: </b> U.A.R")
     )
+
+policy_map
+
+# htmlwidgets::saveWidget(policy_map, file="policy_map.html")
+
 ```
 
 
@@ -332,7 +348,7 @@ gz_nuts <- as(gzones_sp.sf_nuts, "Spatial")
 
 # Create a variable of minimum time for gzones (GZ):
 # The time the FIRST measure was applied.
-# Note: This is not perfect because it only includes the zone of the point and not evet NUTS included in the LEZ.
+# Note: This is not perfect because it only includes the zone of the point and not every NUTS included in the LEZ.
 min_time <- gzones_sp.sf_nuts %>% as.data.frame() %>%
       dplyr::group_by(NUTS_ID) %>% 
       dplyr::summarise(min_time = min(InPlaceSince))
@@ -341,6 +357,47 @@ min_time <- gzones_sp.sf_nuts %>% as.data.frame() %>%
 ```{r}
 min_time
 ```
+
+Temporal application of policies: When were LEZ applied?
+
+```{r, fig.height=12, fig.width= 9}
+all_times <- expand.grid(NUTS_ID = min_time$NUTS_ID, 
+                   year = seq(2005, 2020),
+                   month = seq(01, 12), 
+                   # month = c("01", "02", "03", "04", "05", "06",
+                   #          "07", "08", "09", "10", "11", "12"), 
+                   stringsAsFactors = FALSE)
+all_times
+
+panel_application <- all_times %>%
+  left_join(min_time) %>%
+  mutate(date = as.POSIXct(paste0(year,"-", month, "-01" )),
+         status = ifelse(date < min_time, 0, 1),
+         country = substr(NUTS_ID, 1, 2)) %>%
+  arrange(status) %>%
+  # mutate(ordered_factor = fct_inorder(NUTS_ID)) %>%
+  select(NUTS_ID, date, status, year, month, country)
+panel_application
+```
+
+
+```{r, fig.height=12, fig.width= 9}
+# png(filename = "UAR application Europe.png", 
+#     width = 750, height = 1200, res = 100)
+panelView::panelView(month ~ status, data = panel_application, 
+          index = c("NUTS_ID", "date"), 
+          by.timing = TRUE,
+          axis.lab.gap = c(23,0), 
+          # axis.lab = "time",
+          background = "white",
+          main = "",
+          xlab = "", ylab = "",)
+          #legend.labs = c("No LEZ applied", "Only red, yellow or green sticker", 
+                          # "Only yellow or green sticker", "Only green stiker"),
+          #color = c("grey90", "red1", "yellow1", "green4"))
+# dev.off()
+```
+
 
 
 Map of LEZ zones affected:

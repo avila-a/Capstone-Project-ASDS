@@ -1,0 +1,207 @@
+#The following code returns the total (tot1), direct (dir1) and indirect (ind1) effects implementing
+#MASC method. The lines of the code which does not require user's interaction are labeled as 
+#"(automatic)" in the commented lines immediately above.
+
+#############################################################################################
+####################### CALCULATION OF TOTAL, DIRECT AND INDIRECT EFFECTS ###################
+#############################################################################################
+
+#Load the database: the name has to be "data" and it has to have a column of id, a column
+#with numeric id, a column with time and a mediator and an outcome column
+load("C:/Users/Alessandra/Documents/Dottorato/Visiting/data2.RData")
+#Name of the treated unit in the column with ID col_id
+name_treat<-"FRA"
+
+#Column with ID
+col_id<-1
+#Column with numeric ID
+col_id_num<-7
+#Column with time 
+col_time<-2
+
+#Mediator column
+M<-6
+#Outcome column
+Y<-4
+
+#Starting pre-treatment period
+T_in<-1986
+#Ending pre-treatment period
+T_fi<-1997
+#Ending post-treatment period
+T_fi2<-2007
+#Number of time periods between a value of the mediator and its impact on the outcome
+delay<-1
+
+#Name of the control units in the column with ID col_id (if the control units are all units 
+#in the database except the treated then do not run the two following lines)
+controls_name<-c("AUS", "SWE", "CAN", "CHE", "GBR","JPN","ISR", "NOR","MYS", "NZL", "USA")
+data<-data[which(is.element(data[,col_id], controls_name) | data[,col_id]==name_treat),]
+
+library(Synth)
+library(limSolve)
+
+#Create a column with treatment status (automatic)
+data<-cbind(data, rep(0, nrow(data)))
+data[data[,col_id]==name_treat, ncol(data)]<-1
+
+#Identifies donor pool in the numeric id column (automatic)
+controls<-data[!(data[,col_id]==name_treat) & data[,col_time]==T_in, col_id_num]
+
+#Create all the required constraints (automatic the constraints on all pre-treatment
+#outcome until one year before intervention and pre-treatment mediator until two years 
+#before intervention)
+pretreat4<-list(list(Y, T_in, "mean"))
+for (t in c((T_in+1):T_fi)){
+   pretreat4[[length(pretreat4)+1]]<-list(Y, t, "mean")
+}
+for (t in (T_in-delay):(T_fi-delay)){
+   pretreat4[[length(pretreat4)+1]]<-list(M, t, "mean")
+ }
+#If other constraints are needed complete and run the following line 
+#(copying and pasting it as much as needed)
+#pretreat4[[length(pretreat4)+1]]<-list(column number of the variable, years of interest, "function that has to be applied to the values of that variable in those years")
+#Example 1: pretreat4[[length(pretreat4)+1]]<-list(15, 1986:1990, "mean")
+#Example 2:
+# for (c in 24:37){
+#   pretreat4[[length(pretreat4)+1]]<-list(c, 1991:1997, "mean")
+# }
+
+
+#Add fake pre-treatment outcomes to optimize on pre-treatment mediator values (automatic) during 
+#the choice of matrix V
+#If it is decided to select the weights V to use manually skip these lines of code
+data<-data[which(data[,col_time]>=(T_in-delay) & data[,col_time]<=T_fi2),]
+data2<-data[which(data[,col_time]>=(T_in-delay) & data[,col_time]<=(T_fi-delay)),]
+data2[,Y]<-data2[,M]
+data2<-data2[order(data2[,col_id_num],data2[,col_time]),]
+data2[,col_time]<-rep((T_in-length(T_in:T_fi)-delay):(T_in-1-delay), length(controls)+1)
+data<-rbind(data2, data)
+data<-data[order(data[,col_id_num],decreasing=F),]
+remove(data2)
+
+#Fake starting time (automatic)
+#This starting time is required if the pre-treatment mediator values are added as fake
+#outcomes (see above), otherwise run the commented line below
+T_inf<-T_in-length(T_in:T_fi)-delay
+#T_inf<-T_in
+
+
+################################## TOTAL EFFECT ##########################################
+#Looking for the synthetic unit for the estimation of total effect (automatic):
+prepar<-dataprep(data, special.predictors=pretreat4, dependent=Y, unit.variable=col_id_num, controls.identifier = controls, time.variable =col_time, treatment.identifier =data[data[,col_id]==name_treat & data[,col_time]==T_in,col_id_num], time.predictors.prior=c(T_inf:(T_in-delay-1), T_in:T_fi), time.optimize.ssr = c(T_inf:(T_in-delay-1), T_in:T_fi), time.plot=T_inf:T_fi2)
+sintetico4<-synth(data.prep.obj = prepar)
+#If the weights V are chosen manually run the commented line below rather than those above
+#sintetico4<-synth(data.prep.obj = prepar, custom.v=required weigths)
+
+#Select the values for the graph of the outcome (and the total effect value) (automatic)
+M1<-data[which(data[,ncol(data)]==1 & data[,col_time]>=T_in & data[,col_time]<=T_fi2), Y]
+M_synth<-c()
+for (u in controls){
+  M_synth<-cbind(M_synth, matrix(data[which(data[,col_id_num]==u & data[,col_time]>=T_in & data[,col_time]<=T_fi2), Y], ncol=1))
+}
+#Plot the results (automatic)
+plot(T_in:T_fi2, M1, type="l", ylim=c(min(c(M1, M_synth%*%sintetico4$solution.w))-sd(M1), max(c(M1, M_synth%*%sintetico4$solution.w))+sd(M1)), xlab="Time", ylab="Outcome", main=colnames(data)[Y], sub="Observed Y(1,1) and Synthetic Y(0,0)")
+lines(T_in:T_fi2, M_synth%*%sintetico4$solution.w, add=TRUE, col="red")
+abline(v=(T_fi+1), lty=3)
+#Store the results on total effect and pre and post treatment RMSPE (automatic)
+potenz1<-M1
+potenz2<-M_synth%*%sintetico4$solution.w
+tot1<-potenz1-potenz2
+PRE_RMSPE_tot1<-mean(tot1[1:(length(T_in:T_fi))]^2)
+POST_RMSPE_tot1<-tot1[(length(T_in:T_fi)+1):length(T_in:T_fi2)]
+
+#Select the values for the graph of the mediator when the total effect is calculated (automatic)
+M1<-data[which(data[,ncol(data)]==1 & data[,col_time]>=(T_in-delay) & data[,col_time]<=(T_fi2-delay)), M]
+M_synth<-c()
+for (u in controls){
+  M_synth<-cbind(M_synth, matrix(data[which(data[,col_id_num]==u & data[,col_time]>=(T_in-delay) & data[,col_time]<=(T_fi2-delay)), M], ncol=1))
+}
+#Plot the results (automatic)
+plot(T_in:T_fi2, M1, type="l", ylim=c(min(c(M1, M_synth%*%sintetico4$solution.w))-sd(M1), max(c(M1, M_synth%*%sintetico4$solution.w))+sd(M1)),xlab="Time", ylab="Mediator", main=colnames(data)[M], sub="Observed M(1) and Synthetic M(0)")
+lines(T_in:T_fi2, M_synth%*%sintetico4$solution.w, add=TRUE, col="red")
+abline(v=(T_fi+1), lty=3)
+#Store the results on the effect on the mediator (automatic)
+M_tot1<-(M1-M_synth%*%sintetico4$solution.w)
+
+
+#########################################DIRECT EFFECT#####################################
+#Use the same pre-treatment constraints (automatic)
+pretreat6<-pretreat4
+#Creates vectors to store the results (automatic)
+potenz1<-as.matrix(rep(NA, length(T_in:T_fi2)), nrow=length(T_in:T_fi), ncol=1)
+rownames(potenz1)<-T_in:T_fi2
+potenz2<-as.matrix(rep(NA, length(T_in:T_fi2)), nrow=length(T_in:T_fi), ncol=1)
+rownames(potenz2)<-T_in:T_fi2
+#Apply synth algorithm each post-treatment time period adding each time period an additional 
+#constraint on the mediator required for the time period of interest (i.e. given by the time 
+#period of interest minus the required delay) (automatic)
+j<-1
+for (i in (T_fi+1):T_fi2){
+  #The weigths to select with V can be chosen adding the post-treatment mediator value as a 
+  #fake outcome in the cross validation process if the following commented lines are run. If
+  #this choice is made the commented synth function below has to be run instead than the 
+  #non-commented ones 
+  # data2<-data[which(data[,col_time]==(i-delay)),]
+  # data2[,Y]<-data2[,M]
+  # data2<-data2[order(data2[,col_id_num],data2[,col_time]),]
+  # data2[,col_time]<-rep((T_in-length(T_in:T_fi)-delay-j), length(controls)+1)
+  # databis<-rbind(data2, databis)
+  # data<-data[order(data[,col_id_num],decreasing=F),]
+  # remove(data2)
+  # T_inf<-T_in-j
+  
+  #Add the post-treatment constraint on the mediator for the time period of interest (automatic)
+  pretreat6[[length(pretreat6)+1]]<-list(M, i-delay, "mean")
+  
+  #Looking for the synthetic unit for the estimation of direct effect (automatic):
+  prepar6<-dataprep(data, special.predictors=pretreat6, dependent=Y, unit.variable=col_id_num, controls.identifier = controls, time.variable =col_time, treatment.identifier =data[data[,col_id]==name_treat & data[,col_time]==T_in,col_id_num], time.predictors.prior=c(T_inf:(T_in-delay-1), T_in:T_fi), time.optimize.ssr =c(T_inf:(T_in-delay-1), T_in:T_fi), time.plot=T_in:T_fi2)
+  sintetico6<-synth(data.prep.obj = prepar6, custom.v =c((1/2)*as.numeric(sintetico4$solution.v),rep((1/(2*j)), j)))
+  
+  #Store the results in the vectors previously created (automatic)
+  potenz1temp<-prepar6$Y1plot
+  potenz2temp<-prepar6$Y0plot%*%sintetico6$solution.w
+  potenz1[rownames(potenz1)==i]<-potenz1temp[rownames(potenz1temp)==i]
+  potenz2[rownames(potenz2)==i]<-potenz2temp[rownames(potenz2temp)==i]
+  j<-j+1
+}
+
+#Store pre-treatment period values for the synthetic unit selected when the last post-treatment
+#period was the period of interest (automatic)
+potenz1[rownames(potenz1)>=T_in & rownames(potenz1)<=T_fi]<-potenz1temp[rownames(potenz1temp)>=T_in & rownames(potenz1temp)<=T_fi]
+potenz2[rownames(potenz2)>=T_in & rownames(potenz2)<=T_fi]<-potenz2temp[rownames(potenz2temp)>=T_in & rownames(potenz2temp)<=T_fi]
+
+#Store the results on direct effect and corresponding pre and post treatment RMSPE (automatic)
+dir1<-potenz1-potenz2
+PRE_RMSPE_dir1<-mean(dir1[1:(length(T_in:T_fi))]^2)
+POST_RMSPE_dir1<-dir1[(length(T_in:T_fi)+1):length(T_in:T_fi2)]
+
+#Plot the results (automatic)
+plot(T_in:T_fi2, potenz1, type="l", ylim=c(min(c(potenz1, potenz2))-(sd(potenz1)), max(c(potenz1, potenz2))+sd(potenz1)), xlab="Time", ylab="Outcome", main=colnames(data)[Y], sub="Observed Y(1,1) and Synthetic Y(0,1)")
+lines(T_in:T_fi2, potenz2, add=TRUE, col="red")
+abline(v=(T_fi+1), lty=3)
+
+#Select the values for the graph of the mediator when the direct effect is calculated (automatic)
+M1<-data[which(data[,ncol(data)]==1 & data[,col_time]>=(T_in-delay) & data[,col_time]<=(T_fi2-delay)), M] 
+M_synth<-c()
+for (u in controls){
+  M_synth<-cbind(M_synth, matrix(data[which(data[,col_id_num]==u & data[,col_time]>=(T_in-delay) & data[,col_time]<=(T_fi2-delay)), M], ncol=1))
+}
+#Plot the results (automatic)
+plot(T_in:T_fi2, M1, type="l", ylim=c(min(c(M1, M_synth%*%sintetico6$solution.w))-sd(M1), max(c(M1, M_synth%*%sintetico6$solution.w))+sd(M1)), xlab="Time", ylab="Mediator", main=colnames(data)[M], sub="Observed M(1) and Synthetic M(1)")
+lines(T_in:T_fi2, M_synth%*%sintetico6$solution.w, add=TRUE, col="red")
+abline(v=(T_fi+1), lty=3)
+
+#Store the results on indirect effect and corresponding pre and post treatment RMSPE (automatic)
+ind1<-tot1-dir1
+PRE_RMSPE_ind1<-mean(ind1[1:(length(T_in:T_fi))]^2)
+POST_RMSPE_ind1<-ind1[(length(T_in:T_fi)+1):length(T_in:T_fi2)]
+
+#Plot the results on total, direct and indirect effects in psot-treatment periods (automatic)
+plot((T_fi+1):T_fi2, tot1[(length(T_in:T_fi)+1):length(T_in:T_fi2)], ylim=c(min(tot1, dir1, ind1)-max(sd(tot1), sd(dir1), sd(ind1)), max(tot1, dir1, ind1)+max(sd(tot1), sd(dir1), sd(ind1))), type="l", xlab="Time", ylab="Effects", col="red", lwd=3)
+lines((T_fi+1):T_fi2, dir1[(length(T_in:T_fi)+1):length(T_in:T_fi2)], col="blue", lwd=3)
+lines((T_fi+1):T_fi2, ind1[(length(T_in:T_fi)+1):length(T_in:T_fi2)], col="green", lwd=3)
+legend(T_fi2-2, max(tot1, dir1, ind1)+max(sd(tot1), sd(dir1), sd(ind1)), c("Total Effect", "Direct Effect", "Indirect Effect"),fill=c("red", "blue", "green"), bty="n")
+abline(h=0)
+
+

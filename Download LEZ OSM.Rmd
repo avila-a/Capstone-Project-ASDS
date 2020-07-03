@@ -126,7 +126,7 @@ lez_data <- final_geom %>%
     osm_id, name, boundary, note, source, start_date, website, geometry,
     access, osmwiki
   )
-lez_data <- lez_data %>% st_sf
+lez_data <- lez_data %>% st_sf()
 lez_data %>% class
 
 st_crs(lez_data$geometry) <- "+proj=longlat +datum=WGS84"
@@ -154,10 +154,31 @@ mapview(as(lez_data, 'Spatial'))
 # Save the shape file!!
 
 st_write(lez_data2, "lez_data2.shp")
-methods( class = "sf")
+methods(class = "sf")
 
 ```
 
+## Try to read the saved shapefile (no success for now)
+
+```{r}
+lez_data2 <- readOGR(dsn = "lez_data2.shp")
+lez_data2 %>% st_sf()
+
+plot(lez_data2)
+
+lez_data2$name
+class(lez_data2)
+
+lez_data2@data
+
+ggplot(lez_data2) + geom_sf()
+
+leaflet() %>% addTiles() %>%
+  addPolygons(data = as(lez_data2, 'Spatial'), weight = 6, col = "red")
+mapview(as(lez_data2, 'Spatial'))
+```
+
+---
 
 ```{r}
 # Add projection to geometries

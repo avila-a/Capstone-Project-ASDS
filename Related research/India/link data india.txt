@@ -1,0 +1,7 @@
+www.mospi.nic.in/data
+https://en.wikipedia.org/wiki/List_of_Indian_states_and_union_territories_by_GDP
+
+Contamination in Delhi's sensors: (dialy, only 2018, on PDF!)
+https://cpcb.nic.in/ambient-aq-data-delhi-ncr/
+https://cpcb.nic.in/displaypdf.php?id=bWFudWFsLW1vbml0b3JpbmcvQWlyX1F1YWxpdHlfRGF0YV9EZWxoaS1OQ1JfTm92MjAxNy5wZGY=
+API (that does not have historical data but they say we will have it soon): http://aqicn.org/json-api/doc/

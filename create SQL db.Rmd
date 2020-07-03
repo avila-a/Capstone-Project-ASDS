@@ -10,9 +10,39 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r}
+# detach("package:raster", unload = TRUE)
 library(DBI)
 library(rgdal)
 ```
+
+
+## Index of contents
+
+* Create database
+* Include NUTS characteristics
+  + Basic characteristics (size, ...)
+  + If they have applied UAR or GZ and when
+  + If they are rural or not (to do)
+* Include NUTS3 variables
+  + GDP
+  + GVA / sector
+  + Population / age demographics
+  + Education (none included)
+  + Investment
+  + Population density
+  + Business Demography (none included)
+  
+* Include NUTS2 variables
+  + ...
+  + ...
+  
+* Include data from umweltbundesamt
+  + Umweltezones treatment timming
+  + 
+* Include data from pollution
+  + Mean pollution for each NUTS3 zone
+  + Population-weighted mean pollution for each NUTS3 zone
+  + GDP-weighted mean pollution for each NUTS3 zone
 
 ```{r}
 # create database
@@ -20,64 +50,18 @@ db <- dbConnect(RSQLite::SQLite(), "data/capstonedb")
 
 ```
 
-### Include information on NUTS regions:
-
-```{r}
-nuts.sf <- readOGR("data", "nuts_sf")
-
-nuts.sf@data <- nuts.sf@data %>%
-  mutate(NUTS_NAME = NUTS_NAME %>% as.character(),
-         min_time = as.Date(min_time))
-Encoding(nuts.sf@data$NUTS_NAME) <- "UTF-8"
-
-nuts.sf <- nuts.sf@data
-
-nuts.sf <- nuts.sf %>%
-  dplyr::rename(
-    geo = NUTS_ID,
-    nuts_level = LEVL_CODE,
-    country = CNTR_CODE,
-    nuts_name = NUTS_NAME,
-    min_time_gz = min_time
-  )
-
-nuts.sf %>% head()
-```
-
-
-```{r}
-# Nuts ID 2016 (done)
-# Shapefiles (NOT POSSIBLE)
-
-# Characteristics of nuts3:
-
-# Rural or not?
-
-# Categories of treatment
-## Create a "never treated" and "always treated" variable
-nuts.sf <- nuts.sf %>%
-  mutate(
-    appl_never = ifelse(appl_uar == 0 & appl_gz == 0, 1, 0),
-    appl_sure = appl_uar*appl_gz,
-    min_year_gz = as.character(min_time_gz) %>% 
-           substr(1,4) %>% as.numeric() # year
-  )
-# Write the table:
-nuts.sf %>% head()
-dbWriteTable(db, "nuts3", nuts.sf, overwrite = TRUE)
-dbListFields(db, "nuts3")
-```
-
 ## Table of characteristics of NUTS regions by year:
+
+### NUTS 3
 
 ### gdp measures:
 
 ```{r}
 # turn into wider
-gdp_complete <- read.csv("data/eurostat_gdp_complete.csv")
+gdp_complete <- read.csv("data/eurostat/eurostat_gdp_complete.csv")
 gdp_complete <- gdp_complete %>%
   select(-c("X")) %>%
-  pivot_wider(id_cols = c("geo", "time"), 
+  pivot_wider(id_cols = c("geo", "time"),
               names_from = unit, values_from = values)
 
 # Rename variables:
@@ -94,19 +78,19 @@ gdp_complete %>% head()
 ### GVA measures:
 
 ```{r}
-gva_incomplete <- read.csv("data/eurostat_gva.csv")
+gva_complete <- read.csv("data/eurostat/eurostat_gva_complete.csv")
 
-gva_incomplete <- gva_incomplete %>%
-  filter(currency == "MIO_EUR") %>%
-  select(-c("X", "currency")) %>%
-  pivot_wider(id_cols = c("geo", "time"), 
+gva_complete <- gva_complete %>%
+  # filter(currency == "MIO_EUR") %>%
+  select(-c("X")) %>%
+  pivot_wider(id_cols = c("geo", "time"),
               names_from = c("nace_r2"),
               values_from = values)
 
 
-# Change names 
+# Change names
 # (NOTE: there is probably some work in deciding which are relevant or how to unite/divide them)
-gva_incomplete <- gva_incomplete %>%
+gva_complete <- gva_complete %>%
   dplyr::rename(
     gva_A = A,
     gva_B_E = "B-E",
@@ -125,16 +109,18 @@ gva_incomplete <- gva_incomplete %>%
     gva_tot = "TOTAL"
   )
 
-gva_incomplete
+gva_complete
 ```
 
 
 
-### Population age:
+### Population age and demographics:
+
+- To get dependency ratios and working age population
 
 ```{r}
 # turn into wider
-pop_age_aggr <- read.csv("data/eurostat_pop_age_aggr.csv")
+pop_age_aggr <- read.csv("data/eurostat/eurostat_pop_age_aggr.csv")
 pop_age_aggr <- pop_age_aggr %>%
   filter(sex == "T") %>%
   select(-c("sex", "unit", "X")) %>%
@@ -158,7 +144,7 @@ pop_age_aggr %>% head()
 
 ```{r}
 # FROM 2001 census:
-pop_educ_2001 <- read.csv("data/eurostat_pop_educ_2001.csv")
+pop_educ_2001 <- read.csv("data/eurostat/eurostat_pop_educ_2001.csv")
 
 # turn into wider
 pop_educ_2001 <- pop_educ_2001 %>%
@@ -184,8 +170,11 @@ pop_educ_2001 <- pop_educ_2001 %>%
 
 pop_educ_2001 %>% head()
 
+
+
 # FROM NUTS2 regions yearly:
-pop_educ_NUTS2 <- read.csv("data/eurostat_pop_educ_NUTS2.csv")
+pop_educ_NUTS2 <- read.csv(
+  "data/eurostat/eurostat_pop_educ_NUTS2.csv")
 
 # turn into wider
 pop_educ_NUTS2 <- pop_educ_NUTS2 %>%
@@ -216,20 +205,11 @@ pop_educ_NUTS2 %>% head()
 # Look if there is some data on this or investment in the city level.
 ```
 
-### Investment:
-
-```{r}
-# Intramural R&D Expenditure by Sector (https://urban.jrc.ec.europa.eu/#/en/download)
-
-# Gross fixed capital formation by NUTS 2 regions nama_10r_2gfcf
-
-```
-
 ### Population denisty:
 
 ```{r}
 # Density
-pop_dens <- read.csv("data/eurostat_dens.csv")
+pop_dens <- read.csv("data/eurostat/eurostat_dens.csv")
 
 pop_dens <- pop_dens %>%
   select(-c("X", "unit")) %>%
@@ -238,34 +218,291 @@ pop_dens <- pop_dens %>%
 pop_dens %>% head()
 ```
 
+### Employment (thousand persons)
+
+* "EMP" = "Employed persons", # Person 15y+ (or 16y+ in Iceland and Norway) who during the reference week performed +1h of work for pay, profit or family gain.
+* "SAL" = "Employees"))) # Person with contract to work for employer and receives compensation
+
+
+```{r}
+emp_complete <- read.csv("data/eurostat/eurostat_emp_complete.csv")
+
+emp_complete <- emp_complete %>%
+  filter(wstatus == "SAL") %>%
+  select(-c("X")) %>%
+  pivot_wider(id_cols = c("geo", "time"),
+              names_from = c("nace_r2"),
+              names_prefix = "empl_",
+              values_from = values)
+
+emp_complete %>% head()
+```
+
+
+
 ### Business demography (only from 2008):
 
 ```{r}
 # Density
-# pop_dens <- read.csv("data/eurostat_bd_employer_nace_2008.csv")
+#  <- read.csv("data/eurostat_bd_employer_nace_2008.csv")
 ```
 
-### Pollution
+
+### NUTS 2
+
+### Investment:
+
+- From 2000 to 2017
+
+> ! France, NO and DE have less data of investment
 
 ```{r}
+# Intramural R&D Expenditure by Sector (https://urban.jrc.ec.europa.eu/#/en/download)
 
+inv_cap <- read.csv(
+  "data/eurostat/investment_capital_nuts2.csv")
+
+inv_cap <- inv_cap %>%
+  select(-c("X")) %>%
+  pivot_wider(id_cols = c("geo", "time"),
+              names_from = c("nace_r2"),
+              names_prefix = "inv_",
+              values_from = values) %>%
+  # Make time an integer
+  mutate(time = as.integer(substr(as.character(time), 1, 4)
+           ))
+
+inv_cap %>% arrange(geo) %>% head()
+
+# INCLUDE IN DATABASE
+
+```
+
+### Wages (compensation) for workers:
+
+Total compensation of workers (million euros)
+
+```{r}
+wages_n2 <- read.csv(
+  "data/eurostat/compensation_emp_nace_n2.csv")
+
+wages_n2 <- wages_n2 %>%
+  # filter(wstatus == "WHATEVER I WANT SAL OR EMP") %>%
+  select(-c("X")) %>%
+  filter(currency == "MIO_EUR") %>%
+  pivot_wider(id_cols = c("geo", "time"),
+              names_from = c("nace_r2"),
+              names_prefix = "wages_",
+              values_from = values)
+
+wages_n2 %>% arrange(geo) %>% head()
+
+# INCLUDE IN DATABASE
+
+```
+
+### Hours worked (in thousands):
+
+_NOTE: France and Poland have MISSING_
+
+```{r}
+hours_n2 <- read.csv(
+  "data/eurostat/hours_worked_nuts2.csv")
+
+hours_n2 <- hours_n2 %>%
+  filter(wstatus == "SAL") %>% # SAL has wages, EMP no 
+  select(-c("X", "unit")) %>%
+  pivot_wider(id_cols = c("geo", "time"),
+              names_from = c("nace_r2"), # "wstatus", "..."
+              names_prefix = "hours_",
+              values_from = values)
+
+
+hours_n2 %>% head()
+```
+
+
+### Active pop/age, sex:
+
+- Complete data
+- in thousands
+
+```{r}
+active_pop_n2 <- read.csv(
+  "data/eurostat/active_pop_age_sex_N2.csv")
+
+active_pop_n2 <- active_pop_n2 %>%
+  # filter(wstatus == "WHATEVER I WANT SAL OR EMP") %>%
+  select(-c("X", "unit")) %>%
+  pivot_wider(id_cols = c("geo", "time"),
+              names_from = c("sex", "age"),
+              names_prefix = "active_",
+              values_from = values)
+
+active_pop_n2 %>% head()
+```
+
+
+### Unemployment rates and totals by age, sex and "country of origin"
+
+```{r}
+unemp_rate_n2 <- read.csv("data/eurostat/unemprate_age_sex_nuts2.csv")
+
+unemp_rate_n2 <- unemp_rate_n2 %>%
+  # filter(wstatus == "WHATEVER I WANT SAL OR EMP") %>%
+  select(-c("X", "unit")) %>%
+  pivot_wider(id_cols = c("geo", "time"),
+              names_from = c("sex"),
+              names_prefix = "unempR_",
+              values_from = values)
+
+unemp_rate_n2 %>% summary()
+
+unemp_n2 <- read.csv("data/eurostat/unemp_age_origin_nuts2.csv")
+
+unemp_n2 <- unemp_n2 %>%
+  filter(!(sex != "T" & c_birth != "TOTAL")) %>%
+  select(-c("X", "unit")) %>%
+  pivot_wider(id_cols = c("geo", "time"),
+              names_from = c("c_birth","sex"),
+              names_prefix = "unemp_",
+              values_from = values)
+unemp_n2 %>% names()
+
+unemp_n2 %>% summary()
+```
+
+
+---
+
+## Pollution data
+
+```{r}
+dta_pollution_nuts <- read.csv("data/pollution/dta_pollution_nuts.csv") %>%
+  select(-X) %>%
+  arrange(NUTS_ID) %>%
+  dplyr::rename(geo = NUTS_ID, time = year)
+```
+
+Create means for NUTS2 regions too:
+
+```{r}
+# Assing the mean value of each on the 3 values weithted by the number of pol_rasters to the immidiately supperior NUTS2 region.
+
+dta_pollution_nuts <- pop_age_aggr %>% #Include NUTS 2 and NUTS 1 levels
+  select(geo, time) %>%
+  full_join(dta_pollution_nuts) %>%
+  arrange(geo) %>%
+  # Create a variables that unites NUTS2 region with its NUTS 3 dependents
+  mutate(NUTS2 = substr(geo, 1, 4)) %>%
+  dplyr::group_by(NUTS2, time) %>% # group by NUTS2 and time
+  dplyr::mutate(mean_pol = ifelse(is.na(mean_pol),
+                           weighted.mean(mean_pol, n_pol_rasters,
+                                    na.rm = TRUE),
+                           mean_pol),
+                mean_pol_dens = ifelse(is.na(mean_pol_dens),
+                           weighted.mean(mean_pol_dens,
+                                         n_pol_rasters,
+                                    na.rm = TRUE),
+                           mean_pol_dens),
+                mean_pol_gdp = ifelse(is.na(mean_pol_gdp),
+                           weighted.mean(mean_pol_gdp,
+                                         n_pol_rasters,
+                                    na.rm = TRUE),
+                           mean_pol_gdp)) %>%
+  # filter(substr(geo, 1, 3) == "AL0") %>% # to check results
+  ungroup() %>% dplyr::select(-NUTS2) %>%
+  #Remove NUTS 1 and years that there is no data:
+  filter(!is.nan(mean_pol))
+
+dta_pollution_nuts %>% head()
 ```
 
 
 ## Unite them on a table by nuts-year:
 
 ```{r}
-nuts_time <- gdp_complete %>%
-  left_join(pop_age_aggr) %>%
-  left_join(gva_incomplete) %>%
-  left_join(pop_dens) %>%
+nuts_time <- pop_age_aggr %>% # NUTS 3 vars:
+  left_join(gdp_complete) %>%
+  left_join(emp_complete) %>%
+  left_join(gva_complete) %>%
+  left_join(pop_dens) %>% 
+  # NUTS 2 vars:
+  left_join(inv_cap) %>%
+  left_join(wages_n2) %>%
+  left_join(hours_n2) %>%
+  left_join(active_pop_n2) %>%
+  left_join(unemp_rate_n2) %>%
+  left_join(unemp_n2) %>%
+  # Pollution data
+  left_join(dta_pollution_nuts) %>%
   mutate(geo = as.factor(geo))
-# Education
-# Investment
+
+# TO INCLUDE:
+# Education (2001 has not all the zones, NUTS2 is only for NUTS2)
+# Investment: investment_capital_nuts2.csv (TO INCLUDE)
 # GVA_complete
 # Pollution
-nuts_time %>% head()
-dbWriteTable(db, "nuts_time", value = nuts_time, overwrite = TRUE)
+
+# To look at the merge in a year all variables are available
+nuts_time %>%
+  filter(time == 2016) %>% head(80)
+
+nuts_time %>% is.na() %>% colSums() %>% as.data.frame()
+
+nuts_time %>% names()
+
+dbWriteTable(db, "nuts_time", 
+             value = nuts_time, 
+             overwrite = TRUE)
+
+# Check pollution (lacking NUTS2 data)
+# nuts_time %>%
+#   filter(time == 2016) %>% head(80) %>%
+#   select(geo, mean_pol, mean_pol_dens)
+```
+
+
+## Include data from umweltbundesamt:
+
+### Treatment variables
+
+```{r}
+umweltzonen <- readxl::read_excel(
+  "data/umweltbundesamt/umweltzonen.xlsx", 
+                                  skip = 1)[,1:7]
+
+names(umweltzonen) <- c("State", "LEZ", "Status", 
+                        "Stage_1", "Stage_2", "Stage_3",
+                        "Announcment")
+
+dbWriteTable(db, "umweltzonen", 
+             value = umweltzonen, 
+             overwrite = TRUE)
+umweltzonen
+```
+
+### Air quality plans
+
+```{r}
+airq_plans <- readxl::read_excel(
+  "data/umweltbundesamt/air_quality_plans.xlsx", 
+                                  skip = 1)
+names(airq_plans) <- c("State", "City", 
+                       "Pollutant Capture", 
+                       "Publication", "year")
+airq_plans %>% head()
+
+# Note: urls and links with additional info can be found at the official webpage
+dbWriteTable(db, "airq_plans", 
+             value = airq_plans, overwrite = TRUE)
+
+```
+
+Disconnect from database:
+
+```{r}
 dbDisconnect(db)
 ```
+
 

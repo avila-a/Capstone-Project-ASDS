@@ -2,7 +2,7 @@
 title: "Download eurostat"
 author: "Antonio Avila"
 date: "03/02/2020"
-output: html_document
+output: html_notebook
 ---
 Intro
 
@@ -19,6 +19,11 @@ library(plyr)
 _TO DO:_
 
 * Review the temporal and geographical reach of each variable of interest for the analysis.
+* Data on Turkey is NOT available in Eurostat, but it's available (partially) in[Wikipedia](https://en.wikipedia.org/wiki/List_of_Turkish_provinces_by_GDP#cite_note-:0-1) and [OECD data](https://stats.oecd.org/#)
+  + Regions and Cities > Regional Statistics > Regional Economy > Regional GDP per Capita, OECD.Stats. Accessed on 16 November 2018.
+  + "Statistics by Theme > National Accounts > Regional Accounts". www.turkstat.gov.tr. Retrieved 2019-06-08.
+And the same for the US!
+
 * Look if lower definitions could help fill up some gaps in a NUTS 3 definition grid.
 
 
@@ -30,24 +35,22 @@ search <- search_eurostat("NUTS 3")
 search
 ```
 
-Investment: 
-- Gross fixed capital formation by NUTS 2 regions nama_10r_2gfcf
- 
-```{r}
-# down_eurostat("edat_lfse_12") -> data_experiment
-# data_experiment %>% summary()
-```
 
-<!--NOTE: 
-- Crimes recorded by the police by NUTS 3 regions 
-- Income of households by NUTS 2 regions 
-- Employment in technology and knowledge-intensive sectors by NUTS 2 regions and sex (1994-2008, NACE Rev. 1.1)	
-- Employment in technology and knowledge-intensive sectors by NUTS 2 regions and sex (from 2008 onwards, NACE Rev. 2)	
-- Number of local units, persons employed and wages and salaries by NUTS 2 regions	
-- Causes of death - crude death rate by NUTS 2 region of residence
+
+NOTE of further variables:
+
+- Crimes recorded by the police by NUTS 3 regions
 - Income of households by NUTS 2 regions
-- Unemployment by sex, age, country of birth and NUTS 2 regions
--->
+
+- Employment in technology and knowledge-intensive sectors by NUTS 2 regions and sex (1994-2008, NACE Rev. 1.1)
+
+- Employment in technology and knowledge-intensive sectors by NUTS 2 regions and sex (from 2008 onwards, NACE Rev. 2)
+
+- Number of local units, persons employed and wages and salaries by NUTS 2 regions from https://ec.europa.eu/eurostat/web/structural-business-statistics/data/database (Nice and many other structural business statistics)
+
+- Causes of death - crude death rate by NUTS 2 region of residence hlth_cd_acdr2 (only from 2011)
+
+- Income of households by NUTS 2 regions
 
 ```{r}
 filter_nuts <- function(data, nuts) {
@@ -119,6 +122,7 @@ count_gdp %>%
 
 # Function to know data disponibility of Eurostat tables:
 s_t_eurostat <- function(data){
+  # unique(data$geo)*unique(data$time)
   data %>%
     mutate(geo_char = as.character(geo)) %>%
     mutate(LEVL_CODE = case_when(
@@ -132,7 +136,8 @@ s_t_eurostat <- function(data){
     dplyr::summarise(
       time_min = last(time),
       time_max = first(time),
-      n_obs = n()
+      n_obs = n(),
+      prop = (n_obs - sum(is.na(values)))/n_obs
     ) %>%
     arrange(time_min, desc(n_obs))
 }
@@ -186,7 +191,7 @@ e_gva <- e_gva %>%
 # Note: We have only data until 2016 for france!
 e_gva %>% filter(nace_r2 == "J", geo == "FR101")
 
-write.csv(e_gva, file = "data/eurostat_gva.csv")
+write.csv(e_gva, file = "data/eurostat/eurostat_gva.csv")
 ```
 
 
@@ -234,7 +239,7 @@ head(e_emp)
 summary(e_emp)
 colSums(is.na(e_emp))
 
-write.csv(e_emp, file = "data/eurostat_employment.csv")
+write.csv(e_emp, file = "data/eurostat/eurostat_employment.csv")
 
 ## Also data of labor market by city (with missing data) (see also "urb_clma")
 # https://appsso.eurostat.ec.europa.eu/nui/show.do?dataset=urb_llma&lang=en
@@ -258,6 +263,7 @@ e_gva %>%
 
 e_emp %>%
   mutate(CNTR_CODE = substr(geo, 1, 2) %>% as.factor()) %>%
+  # filter(CNTR_CODE == "FR") %>% select(time) %>% table()
   select(CNTR_CODE) %>% table()
 ```
 
@@ -343,8 +349,9 @@ table((old_emp %>% dplyr::filter(CNTR_CODE == "FR"))$time) # %>% plot(type = 'l'
 # dict_2013_2016_NUTS1 <- readxl::read_excel("~/A - Estudios/LSE_ASDS/Project/PM2.5/NUTS3/NUTS2013-NUTS2016.xlsx",  
 #                              sheet = "Correspondence NUTS-1")
 
-dict_2013_2016_all <- readxl::read_excel("~/A - Estudios/LSE_ASDS/Project/PM2.5/NUTS3/NUTS2013-NUTS2016.xlsx",  
-                             sheet = "NUTS2013-NUTS2016", skip = 1)
+dict_2013_2016_all <- readxl::read_excel(
+  "data/NUTS3/NUTS2013-NUTS2016.xlsx",  
+  sheet = "NUTS2013-NUTS2016", skip = 1)
 
 # THIS IS ALSO EXCLUDING SOME (VERY FIEW) ZONES WHERE IT IS POSSIBLE TO ASSIGN VALUES (LOOK AT `COMPATIBLE` COLLUMN)
 
@@ -480,13 +487,14 @@ e_emp_complete %>%
   ) %>%
   arrange(time_min, desc(n_obs))
 
-write.csv(e_gdp_complete, file = "data/eurostat_gdp_complete.csv")
-write.csv(e_gva_complete, file = "data/eurostat_gva_complete.csv")
-write.csv(e_emp_complete, file = "data/eurostat_emp_complete.csv")
+write.csv(e_gdp_complete, file = "data/eurostat/eurostat_gdp_complete.csv")
+write.csv(e_gva_complete, file = "data/eurostat/eurostat_gva_complete.csv")
+write.csv(e_emp_complete, file = "data/eurostat/eurostat_emp_complete.csv")
 ## France -> No NUTS 3 problems (¿)
 ## Poland -> Review NUTS 3 changes
 
-e_gdp_complete %>% head()
+e_emp_complete %>% head()
+# e_emp_complete$nace_r2 %>% table()
 ```
 
 ```{r}
@@ -510,6 +518,145 @@ Comune (municipality, smaller to nuts 3) -->  https://www.insee.fr/fr/recherche/
 * Jobs by type of sector (same years)
 
 
+Hours worked by NUTS 2 regions: 
+
+_NOTE: France and Poland have MISSING_
+
+```{r}
+# 1000s Hours Worked by NACE activity	EU	NUTS 2	1980	2015	1 year	Eurostat, AMECO, OECD
+
+down_eurostat("nama_10r_2emhrw") -> emp_h_workN2
+
+write.csv(emp_h_workN2, "data/eurostat/hours_worked_nuts2.csv")
+```
+
+Unemployment rate/persons	EU	NUTS 4 (metropolitan area) (imperfect)
+
+```{r}
+down_eurostat("met_lfu3pers") -> unemp_pers_N4
+down_eurostat("met_lfu3rt") -> unemp_rate_N4
+```
+
+- Unemployment by sex, age, country of birth and NUTS 2 regions (imperfect but improvable) - Thousands persons
+
+```{r}
+down_eurostat("lfst_r_lfu2gac") -> unemp_age_origin
+
+# Check if I have unemployment of the most common case for the most important years
+for (i in unique(unemp_age_origin$c_birth)){ # for each type of origin
+unemp_age_origin %>%
+  filter(sex == "T",
+         age == "Y15-74",
+         time <= 2018,
+         time >= 2000,
+         c_birth == i, 
+         # possibles: TOTAL (good), EU15_FOR (acceptable), FOR (good), NAT (v_good)
+         nchar(as.character(geo)) >= 4
+         ) %>%
+  s_t_eurostat() %>%
+  # join with the real number of nuts and calculate the proportion of values in the data
+  left_join(tot_number %>%
+              filter(LEVL_CODE == 2) %>%
+              mutate(tot_nuts_n = tot_nuts*19)) %>% # 16 = number of years
+  mutate(prop = n_obs/tot_nuts_n) %>%
+    print()
+  print(i)
+}
+
+# Restrict to set of more relevant paramenters:
+unemp_age_origin <- unemp_age_origin %>%
+  filter(age == "Y15-74", # "Y25-54" and "Y55-64" also look interesting 
+         time <= 2018,
+         time >= 2000,
+         c_birth %in% c("TOTAL","EU15_FOR", "NEU15_FOR", "FOR", "NAT")
+         #nchar(as.character(geo)) >= 4
+         )
+
+unemp_age_origin %>% head()
+
+write.csv(unemp_age_origin, "data/eurostat/unemp_age_origin_nuts2.csv")
+```
+
+```{r}
+down_eurostat("lfst_r_lfu3rt") -> unemp_r_age
+
+# Chek there is enough data:
+unemp_r_age %>%
+  filter(sex == "T",
+         age == "Y15-74",
+         time <= 2018,
+         time >= 2000,
+         # possibles: TOTAL (good), EU15_FOR (acceptable), FOR (good), NAT (v_good)
+         nchar(as.character(geo)) >= 4
+         ) %>%
+  s_t_eurostat() %>%
+  # join with the real number of nuts and calculate the proportion of values in the data
+  left_join(tot_number %>%
+              filter(LEVL_CODE == 2) %>%
+              mutate(tot_nuts_n = tot_nuts*18)) %>% # 16 = number of years
+  mutate(prop = n_obs/tot_nuts_n) 
+
+# Restrict to set of more relevant paramenters:
+temp <- unemp_r_age %>%
+  filter(age == "Y15-74", # "Y25-54" and "Y55-64" also look interesting 
+         time <= 2018,
+         time >= 2000
+         )
+
+temp %>% head()
+
+write.csv(temp, "data/eurostat/unemprate_age_sex_nuts2.csv")
+```
+
+
+
+Total and active population by sex, age, employment status, residence one year prior to the census and NUTS 3 regions
+
+```{r}
+down_eurostat("cens_01ramigr") -> act_pop_2001
+```
+
+
+Investment in capital per NUTS 2 region:
+
+> ! France, NO and DE have less data of investment
+
+```{r}
+down_eurostat("nama_10r_2gfcf") -> investment_capital_nuts2
+
+investment_capital_nuts2 <- investment_capital_nuts2 %>% 
+  filter(currency == "MIO_EUR") %>%
+  select(-currency)
+
+investment_capital_nuts2
+
+write.csv(investment_capital_nuts2, "data/eurostat/investment_capital_nuts2.csv")
+
+```
+
+
+```{r}
+# Economically active population by sex, age and NUTS 2 regions (1 000)	EU	NUTS 2	1999	2019	1 year	Eurostat	4	
+
+down_eurostat("lfst_r_lfp2act") -> ActPop_age_N2
+
+write.csv(ActPop_age_N2, "data/eurostat/active_pop_age_sex_N2.csv")
+```
+
+Economically active population by sex and age	EU	Metropolitan Regions	2002	2018	1 year	Eurostat	(imperfect)
+
+```{r}
+down_eurostat("met_lfp3pop") -> ActPop_age_Metro
+```
+
+Compensation of employees (SAL, not EMP) (wages) by NACE activity	EU	NUTS 2	2000	2017	1 year	Eurostat	nama_10r_2coe _PROBLEMS WITH FRANCE_
+
+```{r}
+down_eurostat("nama_10r_2coe") -> Comp_emp_Nace_N2
+
+write.csv(Comp_emp_Nace_N2, "data/eurostat/compensation_emp_nace_n2.csv")
+```
+
 
 Science and tech Statistics:
 
@@ -521,54 +668,57 @@ Science and tech Statistics:
 
 
 down_eurostat("ipr_da_reg") -> cd_appl
-write.csv(cd_appl, file = "data/eurostat_cd_appl.csv")
+write.csv(cd_appl, file = "data/eurostat/eurostat_cd_appl.csv")
 
 ### 
 down_eurostat("pat_ep_rtot")  -> e_patent_epo
 table(e_patent_epo$unit)
-write.csv(e_patent_epo, file = "data/eurostat_patent_epo.csv")
+write.csv(e_patent_epo, file = "data/eurostat/eurostat_patent_epo.csv")
 ```
 
 Demografic Statistics:
 
 
 <!-- nama_10r_3popgdp total average pop to calculate gdp -->
-demo_r_d3area area
+<!-- demo_r_d3area area -->
 <!-- demo_r_pjangrp3 pop by age group -->
 <!-- demo_r_pjanaggr3 pop by broad age group -->
 <!-- cens_01rews pop by age, sex and educational attainment level -->
 
 ```{r}
-#  total average pop to calculate gdp (INCOMPLETE FRANCE AND OTHERS)
+#  total average pop to calculate gdp 
+# (INCOMPLETE FRANCE AND OTHERS)
+
 down_eurostat("nama_10r_3popgdp")  -> e_pop_gdp
-write.csv(e_pop_gdp, file = "data/eurostat_pop_gdp.csv")
+
+write.csv(e_pop_gdp, file = "data/eurostat/eurostat_pop_gdp.csv")
 
 
 down_eurostat("demo_r_births")  -> e_births
-write.csv(e_births, file = "data/eurostat_births.csv")
+write.csv(e_births, file = "data/eurostat/eurostat_births.csv")
 
 down_eurostat("demo_r_find3")  -> e_fert
 table(e_fert$indic_de)
-write.csv(e_fert, file = "data/eurostat_fert.csv")
+write.csv(e_fert, file = "data/eurostat/eurostat_fert.csv")
 
 down_eurostat("demo_r_deaths")  -> e_deaths
-write.csv(e_deaths, file = "data/eurostat_deaths.csv")
+write.csv(e_deaths, file = "data/eurostat/eurostat_deaths.csv")
 
-# Population: Structure indicators by NUTS 3 region
-# ONLY FROM 2014!
-down_eurostat("demo_r_pjanind3") -> e_pop_ind
-table(e_pop_ind$indic_de)
-write.csv(e_pop_ind, file = "data/eurostat_pop_ind_2014.csv")
-
-# demo_r_pjangrp3 pop by age group
-down_eurostat("demo_r_pjangrp3") -> e_pop_age
-e_pop_age$age %>% table()
-write.csv(e_pop_age, file = "data/eurostat_pop_age_2014.csv")
+# # Population: Structure indicators by NUTS 3 region
+# # ONLY FROM 2014!
+# down_eurostat("demo_r_pjanind3") -> e_pop_ind
+# table(e_pop_ind$indic_de)
+# write.csv(e_pop_ind, file = "data/eurostat/eurostat_pop_ind_2014.csv")
+# 
+# # demo_r_pjangrp3 pop by age group
+# down_eurostat("demo_r_pjangrp3") -> e_pop_age
+# e_pop_age$age %>% table()
+# write.csv(e_pop_age, file = "data/eurostat/eurostat_pop_age_2014.csv")
 
 # demo_r_pjanaggr3 pop by broad age group
 down_eurostat("demo_r_pjanaggr3") -> e_pop_age_aggr
 e_pop_age_aggr$age %>% table()
-write.csv(e_pop_age_aggr, file = "data/eurostat_pop_age_aggr.csv")
+write.csv(e_pop_age_aggr, file = "data/eurostat/eurostat_pop_age_aggr.csv")
 
 # Dependency ratio
 # "https://urban.jrc.ec.europa.eu/#/en/download"
@@ -578,12 +728,12 @@ write.csv(e_pop_age_aggr, file = "data/eurostat_pop_age_aggr.csv")
 # down_eurostat("cens_11ag_r3") -> e_pop_age_11
 
 down_eurostat("cens_01rapop") -> e_pop_age_01
-write.csv(e_pop_age_01, file = "data/eurostat_cens_01rapop.csv")
+write.csv(e_pop_age_01, file = "data/eurostat/eurostat_cens_01rapop.csv")
 
 # demo_r_d3dens density
 down_eurostat("demo_r_d3dens") -> e_pop_dens
 e_pop_dens %>% head()
-write.csv(e_pop_dens, file = "data/eurostat_dens.csv")
+write.csv(e_pop_dens, file = "data/eurostat/eurostat_dens.csv")
 ```
 
 ### Education:
@@ -592,7 +742,7 @@ write.csv(e_pop_dens, file = "data/eurostat_dens.csv")
 # cens_01rews pop by age, sex and educational attainment level ONLY 2001
 down_eurostat("cens_01rews") -> e_pop_educ_2001
 e_pop_educ_2001$isced97 %>% table()
-write.csv(e_pop_educ_2001, file = "data/eurostat_pop_educ_2001.csv")
+write.csv(e_pop_educ_2001, file = "data/eurostat/eurostat_pop_educ_2001.csv")
 
 #- Pop aged 25-64 by educ level, sex and NUTS 2 regions (%)	- edat_lfse_04
 #- Pop aged 30-34 by educ level, sex and NUTS 2 regions (%) - edat_lfse_12
@@ -600,7 +750,7 @@ down_eurostat("edat_lfse_04") -> e_pop_educ_nuts2
 rbind(e_pop_educ_nuts2, 
       down_eurostat("edat_lfse_12")) -> e_pop_educ_nuts2
 summary(e_pop_educ_nuts2)
-write.csv(e_pop_educ_nuts2, file = "data/eurostat_pop_educ_NUTS2.csv")
+write.csv(e_pop_educ_nuts2, file = "data/eurostat/eurostat_pop_educ_NUTS2.csv")
 
 # https://appsso.eurostat.ec.europa.eu/nui/show.do?dataset=urb_ceduc&lang=en
 get_eurostat("urb_ceduc") -> e_urb_ceduc 
@@ -625,26 +775,26 @@ Business Demography:
 # Business demography and high growth enterprise by NACE Rev. 2 and NUTS 3 regions		
 
 down_eurostat("bd_hgnace2_r3") -> e_bd_growth_nace
-write.csv(e_bd_growth_nace, "data/eurostat_bd_growth_nace_2008.csv")
+write.csv(e_bd_growth_nace, "data/eurostat/eurostat_bd_growth_nace_2008.csv")
 # Business demography by size class and NUTS 3 regions	bd_size_r3	
 
 down_eurostat("bd_size_r3") -> e_bd_growth_size
-write.csv(e_bd_growth_size, "data/eurostat_bd_growth_size_2008.csv")
+write.csv(e_bd_growth_size, "data/eurostat/eurostat_bd_growth_size_2008.csv")
 
 # Employer business demography by NACE Rev. 2 and NUTS 3 regions	
 
 down_eurostat("bd_enace2_r3") -> e_bd_employer_nace_2008
+
 write.csv(e_bd_employer_nace_2008,
-          "data/eurostat_bd_employer_nace_2008.csv")
+          "data/eurostat/eurostat_bd_employer_nace_2008.csv")
 
 # Employer business demography by size class and NUTS 3 regions	bd_esize_r3	
-
 down_eurostat("bd_esize_r3") -> e_bd_employer_size_2008
 write.csv(e_bd_employer_size_2008,
-          "data/eurostat_bd_employer_size_2008.csv")
+          "data/eurostat/eurostat_bd_employer_size_2008.csv")
 
-# read.csv("data/eurostat_bd_employer_nace_2008.csv")
-# read.csv("data/eurostat_bd_growth_size_2008.csv")
+# read.csv("data/eurostat/eurostat_bd_employer_nace_2008.csv")
+# read.csv("data/eurostat/eurostat_bd_growth_size_2008.csv")
 ```
 
 ### Envirnonment:
@@ -664,7 +814,19 @@ Other statistics from eurostat:
 ```{r}
 # Crimes recorded by the police by NUTS 3 regions
 down_eurostat("crim_gen_reg") -> e_crimes
-write.csv(e_crimes, "data/eurostat_crimes_2008.csv")
+write.csv(e_crimes, "data/eurostat/eurostat_crimes_2008.csv")
+```
+
+Deaths per agre group (5y), sex and week 2000-2019 (NUTS 3 regions)
+
+```{r}
+deaths_per_age_sex_week <- get_eurostat("demo_r_mweek3",
+  time_format = "num")
+
+deaths_per_age_sex_week <- deaths_per_age_sex_week %>% 
+  select(-unit)
+
+write.csv(deaths_per_age_sex_week, "data/eurostat/deaths_per_age_sex_week_covid.csv")
 ```
 
 

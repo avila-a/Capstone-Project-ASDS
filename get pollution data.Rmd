@@ -1,0 +1,321 @@
+---
+title: "Get pollution data by NUTS region"
+author: 'Antonio Avila'
+date: "30/06/2020"
+output: 
+  html_notebook:
+  #   code_folding: "show"
+  #   df_print: paged
+  # html_document:
+    # keep_md: true
+  # pdf_document:
+  #   keep_tex: yes
+editor_options: 
+  chunk_output_type: inline
+---
+
+## Load libraries
+
+```{r message=FALSE, warning=FALSE}
+library(sf)
+library(raster)
+library(ncdf4) # to open .nc files
+library(foreign)
+library(dplyr)
+```
+
+
+## Index:
+
+* Including data
+  + PM2.5 rasters
+  + NO2 rasters
+  + Population raster
+  + PIB raster
+* Creating variables
+  + Average pollution for each polutant
+  + , weighted by population
+  + , weighted by GDP
+
+
+## Including data:
+
+
+### Get the PM2.5 grid of pollution (0.01ºx0.01º)
+
+From Van Donkelaar and from Berkeley High Resolution (BEHR) group
+
+#### Van Donkelaar data:
+
+* Source: http://fizz.phys.dal.ca/~atmos/martin/?page_id=140
+* Time: yearly 2001-2016
+* Sources: Grownd based from EEA Air quality E-reporting
+* WGS84 projection
+* (0.01° × 0.01°) resolution
+* Unit: ¿microg/m3?
+
+** !! More¿? data from 1998 can be found here: https://sedac.ciesin.columbia.edu/data/set/sdei-global-annual-gwr-pm2-5-modis-misr-seawifs-aod/data-download
+
+```{r}
+wd_spatial <- "C:/Users/aavil/OneDrive/Documentos/A - Estudios/LSE_ASDS/GY460 - Techniques of Spatial Economic Analysis/Spatial-Project/"
+
+# Guidance: https://stackoverflow.com/questions/38488399/open-multiple-nc-then-write-multiple-raster
+
+files <- list.files(pattern = '*35.nc', full.names = TRUE, 
+                    path = paste0(wd_spatial, "dta/donkelaar/"))
+# names(files) <- seq(2001, 2016, 1)
+rasters_pol <- stack(files)
+
+# to save them as geotiff:
+rnc <- writeRaster(rasters_pol, 
+                   filename = file.path("data/arcgis/pol") ,
+                   bylayer=TRUE, format="GTiff")
+
+rasters_pol
+
+
+# To do averages:
+# tic()
+# avg_pol <- stackApply(x = rasters_pol, indices =  1:16, fun =  mean)
+# toc() takes like 10 minutes
+
+{ # Median yearly pollution and locarion of stations in Barcelona
+  plot(crop(rasters_pol, extent(1.4, 2.4, 41.2, 41.6))$PM25.2)
+}
+```
+
+
+Rasters from https://www.eea.europa.eu/data-and-maps/data/interpolated-air-quality-data-2,
+
+- 2006-2017
+- O2, PM10, PM2.5
+
+
+### Population density raster
+
+- 2015 data
+- https://sedac.ciesin.columbia.edu/data/set/gpw-v4-population-density-rev11
+- "number of persons per square kilometer"
+
+```{r}
+density_raster <- raster(
+  paste0(wd_spatial,'dta/controls/pop_world_1km/gpw_v4_population_density_rev11_2015_30_sec.tif'))
+density_raster <- crop(density_raster, extent(rasters_pol))
+
+density_raster
+```
+
+### GDP raster
+
+- Estimated GDP from night data:
+
+Import the whole world raster
+1km2 raster of local GDP for 2010 source: https://ngdc.noaa.gov/eog/dmsp/download_gdp.html
+
+```{r}
+gdp_raster <- raster(paste0(wd_spatial,'dta/GDP_grid_flt.tif'))
+
+# Cut it for Europe
+gdp_raster <- crop(gdp_raster, extent(rasters_pol))
+gdp_raster
+```
+
+
+
+```{r}
+nuts.sf <- read_sf("data/nuts_sf")
+```
+
+To get averages (population and GDP-weigthed)
+
+```{r}
+# Simple mean by NUTS classification of pollution:
+
+temp <- extract(rasters_pol, nuts.sf, fun=mean, sp=TRUE)
+temp
+```
+
+```{r}
+# weighted means - Population
+density_raster
+sum_pop_nuts <- raster('data/arcgis/sum_pop1.tif')
+# sum_pop_nuts <- extract(density_raster, nuts.sf, fun = sum, sp=TRUE)
+relative_density <- density_raster / sum_pop_nuts
+
+relative_density <- resample(relative_density, rasters_pol)
+
+pol_density <- rasters_pol*relative_density
+
+# Maps to review results
+
+# { # How I create the relative population density
+#   plot(crop(density_raster, extent(1.4, 2.4, 41.2, 41.6)))
+#   plot(crop(sum_pop_nuts, extent(1.4, 2.4, 41.2, 41.6)))
+#   plot(crop(relative_density, extent(1.4, 2.4, 41.2, 41.6)))
+# }
+
+{ # Difference of pollution and pollution(pop-weighted) raster
+  plot(crop(rasters_pol, extent(1.4, 2.4, 41.2, 41.6))$PM25.1)
+  plot(crop(density_raster, extent(1.4, 2.4, 41.2, 41.6)))
+  plot(crop(pol_density, extent(1.4, 2.4, 41.2, 41.6))$layer.1)
+}
+
+# Save each year raster of pop-waighted pollution
+writeRaster(pol_density, 
+            filename = file.path("data/arcgis/pol_dens") ,
+            bylayer=TRUE, format="GTiff")
+
+```
+
+
+```{r}
+# weighted means - GDP
+gdp_raster
+sum_GDP_nuts <- raster('data/arcgis/sum_gdp1.tif')
+
+# sum_pop_nuts <- extract(density_raster, nuts.sf, fun = sum, sp=TRUE)
+relative_gdp <- gdp_raster / sum_GDP_nuts
+
+relative_gdp <- resample(relative_gdp, rasters_pol)
+
+pol_gdp <- rasters_pol*relative_gdp
+
+# Maps to review results
+
+{ # How I create the relative population density
+  plot(crop(gdp_raster, extent(1.4, 2.4, 41.2, 41.6)))
+  plot(crop(sum_GDP_nuts, extent(1.4, 2.4, 41.2, 41.6)))
+  plot(crop(relative_gdp, extent(1.4, 2.4, 41.2, 41.6)))
+}
+
+{ # Difference of pollution and pollution(pop-weighted) raster
+  plot(crop(rasters_pol, extent(1.4, 2.4, 41.2, 41.6))$PM25.1)
+  plot(crop(gdp_raster, extent(1.4, 2.4, 41.2, 41.6)))
+  plot(crop(pol_gdp, extent(1.4, 2.4, 41.2, 41.6))$layer.1)
+}
+
+writeRaster(pol_gdp, 
+            filename = file.path("data/arcgis/pol_gdp") ,
+            bylayer=TRUE, format="GTiff")
+
+# writeRaster(pol_gdp, 
+#             filename = file.path("data/arcgis/pol_gdp_complete"),
+#             format="GTiff")
+
+# gdp_complete <- read.csv("data/arcgis/table_gdp_complete.txt")
+# gdp_complete$NUTS_ID %>% table()
+```
+
+Do this on python / ArcGis:
+
+Help: https://pro.arcgis.com/en/pro-app/tool-reference/spatial-analyst/zonal-statistics-as-table.htm
+```{py}
+# # get wd
+# arcpy.env.workspace = r'C:\Users\aavil\OneDrive\Documentos\A - Estudios\LSE_ASDS\Project\Capstone-Project\data\arcgis'
+# 
+# # include files in folder
+# # arcpy.BuildPyramidsandStatistics_management(arcpy.env.workspace)
+# 
+# # create table
+# ZonalStatisticsAsTable("nuts_sf", "NUTS_ID", 
+#                        "pol_2.tif", "table_pol_2", "DATA")
+# 
+# # Create tables:
+# # Get list of rasters in folder
+# list_dta = arcpy.ListDatasets({},"Raster")
+# # loop over each file
+# for i in list_dta:
+# 	ZonalStatisticsAsTable("nuts_sf", "NUTS_ID", i, "table_" + i, "DATA")
+```
+
+Import pollution data:
+
+```{r}
+
+dbf_files <- list.files("data/arcgis", 
+                        pattern = ".dbf", 
+                        full.names = TRUE)
+
+# remove .xml files
+dbf_files <- dbf_files %>% stringr::str_remove_all(pattern = ".xml")
+dbf_files <- dbf_files[!duplicated(dbf_files)]
+
+# Divide for each one of the variables:
+dbf_dens <- dbf_files %>% stringr::str_subset( pattern = "table_pol_dens")
+dbf_gdp <- dbf_files %>% stringr::str_subset(pattern = "table_pol_gdp")
+dbf_pol <- dbf_files[1:16]
+
+# Import data and mark the year
+
+import_multiple_dbf <- function(list_files){
+  dta = list(NULL)
+  for (i in 1:length(list_files)){
+    dta[[i]] = read.dbf(list_files[i])
+    dta[[i]]$year = i
+  }
+  dta <- data.table::rbindlist(dta) %>% as.data.frame()
+  return(dta)
+}
+dta_pol <- import_multiple_dbf(dbf_pol)
+dta_pol_gdp <- import_multiple_dbf(dbf_gdp)
+dta_pol_dens <- import_multiple_dbf(dbf_dens)
+
+# data_pol = list(NULL)
+# for (i in 1:length(dbf_pol)){
+#   data_pol[[i]] = read.dbf(dbf_pol[i])
+#   data_pol[[i]]$year = i
+# }
+# data_pol <- data.table::rbindlist(data_pol)
+# data_pol
+
+{ # Clear differences in representations
+  plot(dta_pol$MEAN, dta_pol_dens$MEAN)
+  plot(dta_pol$MEAN[1:nrow(dta_pol_gdp)], dta_pol_gdp$MEAN)
+  plot(dta_pol_dens$MEAN[1:nrow(dta_pol_gdp)], dta_pol_gdp$MEAN)
+}
+
+```
+
+Finalise data for PM2.5: 
+
+- Get NUTS region/ year observation with mean of pollution
+
+
+```{r}
+dta_pollution_nuts <- dta_pol %>%
+  dplyr::select(MEAN, NUTS_ID, year, COUNT) %>%
+  dplyr::rename(mean_pol = MEAN) %>%
+  left_join(dta_pol_dens %>%
+              dplyr::select(MEAN, NUTS_ID, year), 
+            by = c("NUTS_ID", "year")) %>%
+  dplyr::rename(mean_pol_dens = MEAN) %>%
+  left_join(dta_pol_gdp %>%
+              dplyr::select(MEAN, NUTS_ID, year), 
+            by = c("NUTS_ID", "year")) %>%
+  dplyr::rename(mean_pol_gdp = MEAN,
+                n_pol_rasters = COUNT) %>%
+  dplyr::select(NUTS_ID, year, mean_pol, mean_pol_dens, mean_pol_gdp,
+                n_pol_rasters)
+
+dta_pollution_nuts <- dta_pollution_nuts %>%
+  mutate(year = year + 2000)
+
+dta_pollution_nuts
+
+# write.csv(dta_pollution_nuts, "data/pollution/dta_pollution_nuts.csv")
+```
+
+
+
+---
+
+Notes and chunks of code:
+
+
+```{r}
+{ # Median yearly pollution and locarion of stations in Barcelona
+  plot(crop(rasters_pol, extent(1.4, 2.4, 41.2, 41.6))$PM25.2)
+  cropbox1 <- drawExtent()
+}
+```
+
