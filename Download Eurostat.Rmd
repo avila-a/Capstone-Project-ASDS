@@ -636,10 +636,12 @@ investment_capital_nuts2
 
 ```
 
+Economically active population by sex, age and NUTS 2 regions
+- 1000s
+- 1999	2019	1 year
+- GE15 -> 15 years or over
 
 ```{r}
-# Economically active population by sex, age and NUTS 2 regions (1 000)	EU	NUTS 2	1999	2019	1 year	Eurostat	4	
-
 down_eurostat("lfst_r_lfp2act") -> ActPop_age_N2
 
 # write.csv(ActPop_age_N2, "data/eurostat/active_pop_age_sex_N2.csv")
@@ -651,7 +653,11 @@ Economically active population by sex and age	EU	Metropolitan Regions	2002	2018	
 down_eurostat("met_lfp3pop") -> ActPop_age_Metro
 ```
 
-Compensation of employees (SAL, not EMP) (wages) by NACE activity	EU	NUTS 2	2000	2017	1 year	Eurostat	nama_10r_2coe _PROBLEMS WITH FRANCE_
+Compensation of employees (SAL, not EMP) (wages) by NACE activity	EU	NUTS 2
+- 2000	2017	1 year	Eurostat	nama_10r_2coe 
+- Million euros
+
+_PROBLEMS WITH FRANCE_
 
 ```{r}
 down_eurostat("nama_10r_2coe") -> Comp_emp_Nace_N2

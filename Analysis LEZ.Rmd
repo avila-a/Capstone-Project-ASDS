@@ -53,8 +53,6 @@ library(lubridate)
 
 ### Nuts Regions geographies 
 
-> to do: # Rural or not?
-
 ```{r}
 # Characteristics of nuts3:
 
@@ -107,28 +105,81 @@ Create variables of interest (outcomes and controls)
 ## (for NUTS2)
 
 ### outcomes:
+
 # hours worked per person (abseentism/temporality)
 # (waiting to get data on hours)
 
-# wages per person
+temp <- dta %>%
+  # dplyr::group_by(geo) %>% # 1000's hours/1000's employees
+  mutate(hours_per_worker = hours_TOTAL/empl_TOTAL,
+         hours_per_day = hours_per_worker/259) #approx
+
+# Looks like correct
+# temp %>%
+#   ggplot() +
+#   geom_histogram(aes(x = hours_per_day))
+
+# wages per worker
 # (waiting to get data on wages)
 
-# wage/hour worked
+temp <- temp %>%
+  # dplyr::group_by(geo) %>%
+  mutate(wages_per_worker = 
+           (wages_TOTAL*1000000)/(empl_TOTAL*1000), 
+         wage_per_day = wages_per_worker/259) #approx
 
-### Controls: 
+# # Looks like correct
+# temp %>%
+#   ggplot() +
+#   geom_density(aes(x = wage_per_day))
+# # +  facet_wrap(facets = vars(time))
+
+# wage/hour worked (productivity?)
+
+temp <- temp %>%
+  # dplyr::group_by(geo) %>%
+  mutate(wage_per_hour = 
+           (wages_TOTAL*1000000)/(hours_TOTAL*1000)) #approx
+
+# # Looks like correct
+# temp %>%
+#   ggplot() +
+#   geom_density(aes(x = wage_per_hour))
+# # +  facet_wrap(facets = vars(time))
+
+# Unemployment
+# (done)
+
+# Employment rate (with respect to active pop or "wotking age pop")
+
+temp <- temp %>%
+  # dplyr::group_by(geo) %>%
+  mutate(empl_rate_active = # both in thousands
+           (empl_TOTAL*1000)/(active_T_Y_GE15*1000),
+         empl_rate_wpop = # both in thousands
+           (empl_TOTAL*1000)/pop_15_64)
+
+## Some doubts left...
+# temp$empl_rate_active %>% hist(breaks = 30) # Why above 1?
+# temp$empl_rate_wpop %>% hist(breaks = 30)
+
+ ### Controls: 
 
 # Investment/capita (nuts 2)
 # Educational level/capita (nuts 2)
 # Dependency ratio (NUTS 2)
-# Share of men/women in the labor market
+
+# Share of Women in the labor market
+temp <- temp %>%
+  # dplyr::group_by(geo) %>%
+  mutate(active_F_share = # both in thousands
+           `active_F_Y15-64`/`active_M_Y15-64`)
+
+temp$active_F_share %>% hist(breaks = 30)
 
 ## (for NUTS 3)
 
 ### Outcomes:
-# Rate of employment (with active population or range of "active" years)
-dta %>%
-  mutate(empl_r_total = empl_TOTAL/pop_15_64)
-
 
 # Proportion of working age population
 
@@ -149,7 +200,7 @@ dta %>% names()
 ```{r}
 umweltzonen <- dbGetQuery(db, "SELECT * from umweltzonen")
 umweltzonen %>% head()
-umweltzonen %>% dim()
+# umweltzonen %>% dim()
 ```
 
 
@@ -185,7 +236,7 @@ get_volatility <- function(data = dta,
 
 
 ```{r}
-temp <- get_volatility(data = dta, CNTR_CODE = "DE",
+temp2 <- get_volatility(data = temp, CNTR_CODE = "DE",
                        time_vector = 2000:2019,
                        variable = "unempR_T")
 dta %>% names()
@@ -195,53 +246,17 @@ dta %>% names()
 
 
 
-
-
-
-```{r}
-temp <- dta %>%
-  mutate(nuts1 = substr(geo, 3, 4),
-         country = substr(geo, 1, 2)) %>%
-  filter(
-    country == "DE",
-    !is.element(time, c(2008, 2009, 2010, 2011)),
-  ) %>%
-  group_by(geo) %>%
-  mutate(perc_change = (gdp_eur_hab/lag(gdp_eur_hab)-1)*100) %>%
-  ungroup() %>%
-  group_by(nuts1, time) %>%
-  mutate(mean_change = mean(perc_change, na.rm = TRUE),
-         perc_change_dev = perc_change - mean_change)
-  
-deviations_ger <- gdp_de %>%
-  select(gdp_eur_hab, geo, time) %>%
-  # filter(!is.element(time,c(2008, 2009, 2010, 2011))) %>%
-  mutate(nuts1 = substr(geo, 3, 4),
-         country = substr(geo, 1, 2)) %>%
-  group_by(geo) %>%
-  mutate(perc_change = (gdp_eur_hab/lag(gdp_eur_hab)-1)*100) %>%
-  ungroup() %>%
-  group_by(nuts1, time) %>%
-  mutate(mean_change = mean(perc_change, na.rm = TRUE),
-         perc_change_dev = perc_change - mean_change)
-
-temp$perc_change_dev %>% hist(breaks = 1000, xlim = c(-10,10))
-temp$perc_change_dev %>% summary()
-```
-
-
-
 ### Small analysis of the volatility of the GDP data:
 
 For the whole dataset:
 
 ```{r}
-gdp %>%
-  select(gdp_eur_hab, geo, time) %>%
+temp %>%
+  select(unemp_TOTAL_T, geo, time) %>%
   arrange(geo,time) %>%
   mutate(country = substr(geo, 1, 2)) %>%
   group_by(geo) %>%
-  mutate(perc_change = (gdp_eur_hab/lag(gdp_eur_hab)-1)*100) %>%
+  mutate(perc_change = (unemp_TOTAL_T/lag(unemp_TOTAL_T)-1)*100) %>%
   ggplot(aes(x = time, y = perc_change, fill = geo, colour = country)) +
            geom_line(alpha = 0.05) +
   guides(fill = FALSE) +
@@ -550,17 +565,18 @@ data(gsynth)
 #               parallel = FALSE)
 
 out2 <- gsynth(gdp_eur_hab ~ treat_gz + gva_A + gva_B_E + 
-            gva_F + gva_G_I + gva_J + gva_K + gva_L + 
-            gva_M_N + gva_O_U, 
-              data = data_synth_c, 
-              index = c("geo","time"), 
-              force = "two-way", CV = TRUE, 
-              r = c(0, 4), # an integer specifying the number of factors. If CV = TRUE, the cross validation procedure will select the optimal number of factors from r to 5.
-              se = TRUE, 
-              # EM = TRUE, # Gobillon and Magnac (takes a lot of time)
-              inference = "parametric", nboots = 100,  #500
-              parallel = TRUE,
-              min.T0 = 6) # Has to be larger than r.max+1
+                 gva_F + gva_G_I + gva_J + gva_K + gva_L + 
+                 gva_M_N + gva_O_U, 
+               data = data_synth_c, 
+               index = c("geo","time"), 
+               force = "two-way", 
+               CV = TRUE, 
+               r = c(0, 4), # an integer specifying the number of factors. If CV = TRUE, the cross validation procedure will select the optimal number of factors from r to 5.
+               se = TRUE, 
+               # EM = TRUE, # Gobillon and Magnac (takes a lot of time)
+               inference = "parametric", nboots = 100,  #500
+               parallel = TRUE,
+               min.T0 = 6) # Has to be larger than r.max+1
 
 # Idea: include countries/NUTS 2 regions and others as FE to control for heterogeneity?
 

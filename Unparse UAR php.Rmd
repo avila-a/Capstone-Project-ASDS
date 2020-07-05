@@ -432,7 +432,13 @@ umweltzonen <- umweltzonen %>% cbind(temp2[, c("x", "y")])
 umweltzonen <- st_as_sf(umweltzonen, coords = c("x", "y"),
                  crs = "+proj=longlat +datum=WGS84 +no_defs")
 umweltzonen %>% names()
-umweltzonen
+# umweltzonen
+```
+
+
+```{r}
+# saveRDS(umweltzonen, "data/umweltbundesamt/umweltonen.rds")
+# readRDS("data/umweltbundesamt/umweltonen.rds")
 ```
 
 ### Create multiple sets of controls: 
@@ -602,42 +608,8 @@ nuts.sf <- nuts.sf %>%
 nuts.sf %>% as.data.frame() %>%
   select(treated_osm, treated_uar, treated_gz, treated_uz) %>%
   table()
-
-treated_and_controls <- leaflet() %>% 
-  addTiles() %>%
-  addPolygons(data = nuts.sf %>%
-                filter(treated_any == TRUE), 
-              weight = 4, col = "red") %>%
-  addPolygons(data = lez_shapes, col = "green") %>%
-  addPolygons(data = nuts.sf %>%
-                filter(with_uar_50km == FALSE), col = "blue") %>%
-  addMarkers(data = umweltzonen,
-             popup = paste0(
-               "<b>", umweltzonen$LEZ, "</b> <br/>",
-               "<b> Start date: </b>", umweltzonen$Stage_1, "<br/>",
-               "<b> Source: </b> Umweltzonen"))
-
-treated_and_controls
-
-htmlwidgets::saveWidget(treated_and_controls,
-                        file="map_tr_and_controls_.html")
 ```
 
-```{r}
-treated_and_controls_2 <- leaflet() %>% 
-  addTiles() %>%
-  addPolygons(data = nuts.sf %>%
-                filter(treated_any == TRUE,
-                       LEVL_CODE == 2), 
-              weight = 4, col = "red") %>%
-  addPolygons(data = lez_shapes, col = "green") %>%
-  addPolygons(data = nuts.sf %>%
-                filter(with_uar_50km == FALSE,
-                       LEVL_CODE == 2), col = "blue") %>%
-  addMarkers(data = umweltzonen)
-
-treated_and_controls_2
-```
 
 
 <!-- ```{r} -->
@@ -791,8 +763,88 @@ nuts.sf %>% names()
 ```
 
 
+### Get degree of urbanization
+
+- Modified in ArcGis fron LAU regions to NUTS 3 by taking the mean of (1, 2, 3) being urban, sub urban and rural.
+
+- Source https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/population-distribution-demography/degurba#degurba01
+
+- year: 2014
+
+```{r}
+nuts_urban <- st_read("data/arcgis/nuts_mean_urban.shp")
+nuts_urban$DGUBA_CODE %>% hist(breaks = 45)
+
+nuts_urban <- nuts_urban %>%
+  as.data.frame() %>% # Remove Spatial info
+  mutate(DGUBA_CODE = ifelse(DGUBA_CODE > 3 | DGUBA_CODE == 0,
+                             NA, DGUBA_CODE)) %>% # Drop NAs
+  select(LEVL_CODE, NUTS_ID, CNTR_CODE, DGUBA_CODE) %>%
+  arrange(NUTS_ID) %>%
+  dplyr::rename(urb_index = DGUBA_CODE)
+
+nuts_urban$urb_index %>% hist(breaks = 45)
+nuts_urban$urb_index %>% summary()
+
+# Include the variable into nuts.sf
+nuts.sf <- nuts.sf %>%
+  left_join(nuts_urban)
+
+(nuts.sf %>% as.data.frame() %>% select(-geometry) %>%
+  filter(treated_any == TRUE) %>%
+  select(urb_index))$urb_index %>% summary()
+
+# 3rd quartile of urbanization index for treated is 2.548
+
+```
+
+```{r}
+treated_and_controls <- leaflet() %>% 
+  addTiles() %>%
+  addPolygons(data = nuts.sf %>%
+                filter(treated_any == TRUE), 
+              weight = 4, col = "red") %>%
+  addPolygons(data = lez_shapes, col = "green") %>%
+  addPolygons(data = nuts.sf %>%
+                filter(contr_restr_50km == TRUE,
+                       # urb_index < 2.7
+                       ), # Not very rural
+              col = "blue") %>%
+  addMarkers(data = umweltzonen,
+             popup = paste0(
+               "<b>", umweltzonen$LEZ, "</b> <br/>",
+               "<b> Start date: </b>", umweltzonen$Stage_1, "<br/>",
+               "<b> Source: </b> Umweltzonen"))
+
+# treated_and_controls
+
+htmlwidgets::saveWidget(treated_and_controls,
+                        file="map_tr_and_controls_.html")
+
+treated_and_controls_2 <- leaflet() %>% 
+  addTiles() %>%
+  addPolygons(data = nuts.sf %>%
+                filter(treated_any == TRUE,
+                       LEVL_CODE == 2), 
+              weight = 4, col = "red") %>%
+  addPolygons(data = lez_shapes, col = "green") %>%
+  addPolygons(data = nuts.sf %>%
+                filter(contr_restr_50km == TRUE,
+                       LEVL_CODE == 2,
+                       # urb_index < 2.7
+                       ), 
+              col = "blue") %>%
+  addMarkers(data = umweltzonen,
+             popup = paste0(
+               "<b>", umweltzonen$LEZ, "</b> <br/>",
+               "<b> Start date: </b>", umweltzonen$Stage_1, "<br/>",
+               "<b> Source: </b> Umweltzonen"))
+
+treated_and_controls_2
+```
 
 Include all relevant data in nuts.sf and save it.
+
 
 ```{r}
 # # Mark NUTS 3 regions that have a city or point marked in eather UAR or GZ
@@ -808,11 +860,40 @@ Include all relevant data in nuts.sf and save it.
 nuts.sf %>% head(20)
 ```
 
+## Date of treatment and treatment status
+
+```{r}
+nuts.sf.treated <- nuts.sf %>%
+  st_join(umweltzonen)
+
+# If there are multiple zones in a given NUTS region I get multiple observations of that region 
+
+nuts.sf.treated <- nuts.sf_treated %>%
+  mutate(more_one_nuts = duplicated(NUTS_ID)) %>%
+  dplyr::group_by(NUTS_ID) %>%
+  dplyr::mutate(more_one_nuts = sum(more_one_nuts)) %>%
+  ungroup()
+
+# List og NUTS regions that have only one LEZ: 
+nuts.sf.treated %>%
+  filter(!is.na(LEZ),
+         more_one_nuts == 0)
+
+nuts.sf.treated <- temp %>%
+  filter(more_one_nuts == 0) %>%
+  select(-more_one_nuts)
+
+nuts.sf.treated %>% head()
+```
+
+
+
+## Save the data
 
 ```{r}
 ## st_write(obj = nuts.sf, "data/nuts_sf.shp", delete_layer = TRUE)
 
-# saveRDS(nuts.sf, "data/nuts_sf_final")
-# readRDS("data/nuts_sf_final")
+# saveRDS(nuts.sf.treated, "data/nuts_sf_treated")
+# nuts.sf.treated <- readRDS("data/nuts_sf_treated")
 ```
 

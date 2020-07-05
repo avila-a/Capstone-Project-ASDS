@@ -1,0 +1,503 @@
+---
+title: "Analysis LEZ 2"
+author: '41783'
+date: "25/02/2020"
+output: 
+  html_notebook:
+    code_folding: show
+    # keep_md: true
+    df_print: paged
+---
+
+Basic configuration and loading of packages:
+
+```{r setup, include=FALSE}
+# rm(list = ls())
+knitr::opts_chunk$set(
+  echo = TRUE, 
+  fig.align = "center",
+  out.width = '80%'
+)
+```
+
+```{r message=FALSE, warning=FALSE}
+# library(jsonlite)
+library(tidyverse)
+library(rvest)
+
+library(sf) # Geo analysis
+# library("rgdal")
+
+library(DBI) # SQL db
+
+library(panelView)
+library(lubridate)
+```
+
+
+## Index of contents
+
+* Read data from pre-processing
+  + Nuts regions geographies
+  + data from capstone_db
+    * nuts_time (outcomes, controls and mediators)
+    * treatment from Umweltzonen
+* Do explorative analysis on the volatility of outcomes
+* Create variables of interest
+* Do analysis
+
+
+
+
+## Read data from pre-processing:
+
+### Nuts Regions geographies 
+
+```{r}
+# Characteristics of nuts3:
+
+nuts.sf <- readRDS("data/nuts_sf_final")
+
+nuts.sf <- nuts.sf %>%
+  dplyr::rename(
+    geo = NUTS_ID,
+    nuts_level = LEVL_CODE,
+    country = CNTR_CODE,
+    nuts_name = NUTS_NAME
+  )
+
+nuts.sf %>% as.data.frame() %>% head()
+```
+
+### Get data from SQLdb:
+
+```{r}
+db <- dbConnect(RSQLite::SQLite(), "data/capstonedb")
+dbListTables(db)
+```
+
+Tables:
+
+* airq_plans: List of (new) air quality plans
+* nuts3: NUTS code, name and attainment status according to UAR and GZ, and minimum year for GZ
+* umweltzonen: Treatment status of all zones in germany for each status with timing.
+* nuts_time statistical data on NUTS regions (outcomes and controls)
+
+#### Get nuts_time (outcomes, mediators and controls)
+
+```{r}
+dta <- dbGetQuery(db, "SELECT * from nuts_time")
+dta %>% filter(time == 2006)
+dta %>% names()
+```
+
+Create variables of interest (outcomes and controls)
+(and possibly a restricted dataset only with those)
+
+```{r}
+## (for NUTS2)
+
+### outcomes:
+
+# hours worked per person (abseentism/temporality)
+# (waiting to get data on hours)
+
+dta <- dta %>%
+  # dplyr::group_by(geo) %>% # 1000's hours/1000's employees
+  mutate(hours_per_worker = hours_TOTAL/empl_TOTAL,
+         hours_per_day = hours_per_worker/259) #approx
+
+# Looks like correct
+# dta %>%
+#   ggplot() +
+#   geom_histogram(aes(x = hours_per_day))
+
+# wages per worker
+# (waiting to get data on wages)
+
+dta <- dta %>%
+  # dplyr::group_by(geo) %>%
+  mutate(wages_per_worker = 
+           (wages_TOTAL*1000000)/(empl_TOTAL*1000), 
+         wage_per_day = wages_per_worker/259) #approx
+
+# # Looks like correct
+# dta %>%
+#   ggplot() +
+#   geom_density(aes(x = wage_per_day))
+# # +  facet_wrap(facets = vars(time))
+
+# wage/hour worked (productivity?)
+
+dta <- dta %>%
+  # dplyr::group_by(geo) %>%
+  mutate(wage_per_hour = 
+           (wages_TOTAL*1000000)/(hours_TOTAL*1000)) #approx
+
+# # Looks like correct
+# dta %>%
+#   ggplot() +
+#   geom_density(aes(x = wage_per_hour))
+# # +  facet_wrap(facets = vars(time))
+
+# Unemployment
+# (done)
+
+# Employment rate (with respect to active pop or "wotking age pop")
+
+dta <- dta %>%
+  # dplyr::group_by(geo) %>%
+  mutate(empl_rate_active = # both in thousands
+           (empl_TOTAL*1000)/(active_T_Y_GE15*1000),
+         empl_rate_wpop = # both in thousands
+           (empl_TOTAL*1000)/pop_15_64)
+
+## Some doubts left...
+# dta$empl_rate_active %>% hist(breaks = 30) # Why above 1?
+# dta$empl_rate_wpop %>% hist(breaks = 30)
+
+ ### Controls: 
+
+# Investment/capita (nuts 2)
+# Educational level/capita (nuts 2)
+# Dependency ratio (NUTS 2)
+
+# Share of Women in the labor market
+dta <- dta %>%
+  # dplyr::group_by(geo) %>%
+  mutate(active_F_share = # both in thousands
+           `active_F_Y15-64`/`active_M_Y15-64`)
+
+dta$active_F_share %>% hist(breaks = 30)
+
+## (for NUTS 3)
+
+### Outcomes:
+
+# Proportion of working age population
+
+# Dependency rate
+
+### Controls
+# mean age
+# mortality and birth rate
+
+dta %>% names()
+ # others to do GDP and Productivity: GDP/capita, Investment/capita, wage levels, 
+```
+
+
+### Small analysis of the volatility of data:
+
+```{r}
+get_volatility <- function(data = dta, 
+                           CNTR_CODE = "DE", 
+                           time_vector = 2000:2019,
+                           variable = "gdp_eur_hab",
+                           cluster_differences = "nuts1" # can be "country"
+){
+  temp <- data %>%
+    arrange(geo, time) %>%
+    dplyr::mutate(nuts1 = substr(geo, 3, 4),
+           country = substr(geo, 1, 2)) %>%
+    filter(
+      country == CNTR_CODE,
+      # !is.element(time, c(2008, 2009, 2010, 2011)),
+    ) %>%
+    dplyr::group_by(geo) %>%
+    dplyr::mutate(perc_change_unit = (eval(parse(text=variable))-lag(eval(parse(text=variable))))/lag(eval(parse(text=variable)))*100) %>%
+    ungroup() %>%
+    dplyr::group_by("nuts1", time) %>%
+    dplyr::mutate(mean_change_group = mean(perc_change_unit, na.rm = TRUE),
+           perc_change_dev = perc_change_unit - mean_change_group) %>%
+    ungroup() %>%
+    select(geo, time, variable, mean_change_group, perc_change_unit, perc_change_dev)
+  print(temp %>% summary)
+  return(temp)
+}
+```
+
+
+```{r}
+temp2 <- get_volatility(data = temp, CNTR_CODE = "DE",
+                       time_vector = 2000:2019,
+                       variable = "unempR_T")
+# temp2
+
+# pop_total, empl_EMP_TOTAL, inv_TOTAL, wages_TOTAL, mean_pol, 
+```
+
+
+### Nuts Regions geographies and treatment status
+
+All nuts 3 and nuts 2 regions that had multiple LEZ were excluded from this data, so will have NA when I merge it with "dta".
+
+```{r}
+nuts_treated <- readRDS("data/nuts_sf_treated")
+
+nuts_treated <- nuts_treated %>%
+  dplyr::rename(
+    geo = NUTS_ID,
+    nuts_level = LEVL_CODE,
+    country = CNTR_CODE,
+    nuts_name = NUTS_NAME
+  ) 
+
+nuts_treated %>% as.data.frame() %>% head()
+```
+
+## Unite variables and treatment status:
+
+```{r}
+temp <- nuts_treated %>% 
+  as.data.frame() %>%
+  select(-geometry) %>%
+  right_join(dta, by = "geo")
+```
+
+# Synthetic control method:
+
+* ! Note: 
+* ! This is being done with fake treatment groups that are really controls because the area was not taken into account.
+* !
+
+
+```{r}
+# install.packages("Synth")
+library(Synth)
+# data(basque)
+# basque
+# ?Synth::dataprep()
+# Synth::dataprep(foo = nuts_try, 
+#                 predictors = values, # This is wrong
+#                 dependent = values,
+#                 unit.variable = NUTS_ID,
+#                 time.variable = time,
+#                 treatment.identifier = "HR043",
+#                 )
+# nuts_try
+```
+
+http://yiqingxu.org/teaching/17802/synth.pdf
+https://www.stata.com/meeting/uk17/slides/uk17_Cerulli.pdf
+https://blogs.worldbank.org/impactevaluations/evaluating-regulatory-reforms-using-the-synthetic-control-method
+https://jech.bmj.com/content/72/8/673
+
+
+## Generalized Synthetic control method (experiment)
+
+1. Try with NUTS 2 regions. 
+  - Variable: Unemployment rate total, case: Berlin
+2. Try with NUTS 3 regions. 
+  - Variable: Employed population rate, case: Aachen
+
+```{r}
+library(gsynth)
+library(lubridate)
+
+# Prepare data for NUTS 2 synthetic control -> Treatment var to dummy +  restrict controls
+
+# Would be good to do this before.
+temp %>%
+  # Transformate treatment var into a dummy variable
+  group_by(geo) %>%
+  mutate(
+    is_inagurated = as_date(Stage_1, format = "%d.%m.%Y") %>% year(),
+    is_announced = as_date(Announcment, format = "%d.%m.%Y") %>% year(),
+  ) %>%
+  ungroup() %>%
+  mutate(
+    is_inagurated = case_when(
+      is.na(is_inagurated) ~ 0, # If its control, never inagurated
+      time < is_inagurated ~ 0, # If its before the inaguration
+      TRUE ~ 1 # if neither, then its after
+    ),
+    is_announced = case_when(
+      is.na(is_announced) ~ 0, # If its control, never
+      time < is_announced ~ 0, # If its before
+      TRUE ~ 1 # if neither, then its after
+    )
+  ) %>%
+  select(geo, time, LEZ,
+         Stage_1, is_inagurated,
+         Announcment, is_announced,
+         )  %>%
+  filter(!is.na(Stage_1))
+
+```
+
+
+```{r}
+data(gsynth)
+
+# ?gsynth
+turnout
+simdata
+
+# out <- gsynth(Y ~ D + X1 + X2, data = simdata, 
+#               index = c("id","time"), 
+#               force = "two-way", CV = TRUE, 
+#               r = c(0, 5), se = TRUE, 
+#               inference = "parametric", nboots = 1000, 
+#               parallel = FALSE)
+
+
+```
+
+
+```{r}
+# install.packages('gsynth', type = 'source')
+library(gsynth)
+
+out2 <- gsynth(gdp_eur_hab ~ treat_gz + gva_A + gva_B_E + 
+                 gva_F + gva_G_I + gva_J + gva_K + gva_L + 
+                 gva_M_N + gva_O_U, 
+               data = data_synth_c, 
+               index = c("geo","time"), 
+               force = "two-way", 
+               CV = TRUE, 
+               r = c(0, 4), # an integer specifying the number of factors. If CV = TRUE, the cross validation procedure will select the optimal number of factors from r to 5.
+               se = TRUE, 
+               # EM = TRUE, # Gobillon and Magnac (takes a lot of time)
+               inference = "parametric", nboots = 100,  #500
+               parallel = TRUE,
+               min.T0 = 6) # Has to be larger than r.max+1
+
+# Idea: include countries/NUTS 2 regions and others as FE to control for heterogeneity?
+
+# NOTE: I need to correct from assigning treatment by a point to assygn treatment by the area. If not, some NUTS3 in Paris and London will be counted as controls! 
+# They should eather be treated or cease to be controls [ ]
+# !!!
+```
+
+
+
+
+```{r}
+out2 %>% print()
+out2$est.att
+out2$est.avg
+out2$est.beta
+out2$Y.ct %>% as.data.frame() # pred counterfactuals for the treated units.
+out2$Y.co %>% as.data.frame()
+out2$eff %>% as.data.frame()  # Y - predicted Y(0);
+out2$eff.cnt %>% as.data.frame() # Y - predicted Y(0); rearranged based on the timing of the treatment.
+
+# Inspect results, how are the estimated tratement effects for all treated?
+
+out2$eff.cnt %>% as.data.frame() %>% # Y - predicted Y(0);
+  rownames_to_column(var = "year") %>% 
+  mutate(year = as.numeric(year)) %>%
+  pivot_longer(-year, names_to = "geo", 
+               values_to = "y_minus_y0") %>%
+  left_join(data) -> all_treat_effects
+
+all_treat_effects %>%
+  ggplot(aes(x = year, y = y_minus_y0)) +
+  geom_line( aes(colour = nuts_name))
+# Note: I need to see if this continues to happen for random pacebo treatments 
+all_treat_effects
+```
+
+_Questions:_ 
+
+* What is the CV procedure of gsynth?
+* What is the bootstraping procedure of gsynth?
+
+```{r}
+# out2$est.co$residuals %>% as.data.frame()
+# plot(out2, ylim = c(-0.4, 0.02))
+plot(out2, ylim = c(-5000, 2000))
+
+plot(out2, type = "counterfactual", 
+     raw = "all", main="") # Why the final dip?
+
+plot(out2, type = "counterfactual", 
+     raw = "none", main="") # Why the final dip?
+
+plot(out2, type = "counterfactual", id = "UKF14") # Nottingham
+plot(out2, type = "counterfactual", id = "FR101") # Paris
+plot(out2, type = "counterfactual", id = "HU110") # Budapest
+plot(out2, type = "counterfactual", id = "DE111") # Stuttgart
+plot(out2, type = "counterfactual", id = "DE212") #	München
+plot(out2, type = "counterfactual", id = "UKI32") #	Westminster (LDN)
+# LONDON BOROUGHS! UKI31 - UKI45
+# UKI31	Camden and City of London	
+# UKI32	Westminster
+# UKI33	Kensington & Chelsea and Hammersmith & Fulham		
+# UKI34	Wandsworth		
+# UKI41	Hackney and Newham		
+# UKI42	Tower Hamlets
+# UKI43	Haringey and Islington		
+# UKI44	Lewisham and Southwark		
+# UKI45	Lambeth
+# UKI51	Bexley and Greenwich		
+# UKI52	Barking & Dagenham and Havering		
+# UKI53	Redbridge and Waltham Forest		
+# UKI54	Enfield
+
+data_synth_c %>%
+  filter(substr(geo, 1, 2) == "UK") %>%
+  arrange(geo) %>%
+  filter(geo == "UKI32")
+
+# London (LEZ) initial date (2008) is WRONG, it is the ULEZ one (2019)
+# The CCS was introduced in 2003, expansion on 2007
+```
+
+
+## Extras:
+
+### Try to extract kmls (geographies of all LEZ):
+_NOTE_: The files are encrypted, I need to deencrip them before. C#.
+```{r}
+# library(rgdal)
+# belg_ghent = readOGR(dsn = "~/A - Estudios/LSE - Applied Social Data Science/Project/PM2.5/Data Europe/BelgienGent.kmls")
+# ??readOGR
+```
+
+### Good info on spatial analysis:
+https://mgimond.github.io/Spatial/uncertainty-in-census-data.html
+
+### Fast and reliable computation of generalized synthetic controls (MSCMT package)
+(look at Mendelay paper and to https://cran.r-project.org/web/packages/MSCMT/index.html)
+
+### New methodologies (2019) on multiple timing and periods DiD:
+https://andrewcbaker.netlify.com/2019/09/25/difference-in-differences-methodology/
+
+### Abadie and L'Hour code for SCM with penalization for interpolation biases:
+
+https://github.com/jlhourENSAE/regsynth
+
+### RNN - based methods: Predict the synthetic control with NN:
+https://ideas.repec.org/p/arx/papers/1712.03553.html
+
+### "CausalInference" the Google made package to estimate Bayesian Structural Time Series Models:
+https://google.github.io/CausalImpact/
+
+### Critiques to synth methods with CV if done improperly:
+- Look at Mendeley biblography on 04/2020
+
+### Non-parametric Synth (Italian researcher - on STATA)
+https://ideas.repec.org/c/boc/bocode/s458398.html
+https://www.sciencedirect.com/science/article/pii/S0165176519301788?entityID=https%3A%2F%2Flse.ac.uk%2Fidp&pes=vor 
+
+## Similar analysis with code and other methodologies: (to read and review)
+https://andrewcbaker.netlify.com/2020/01/01/what-can-we-say-about-medical-marijuana-and-opioid-overdose-mortality/
+
+## How much pollution comes from cars? (and other info from the EC):
+https://ec.europa.eu/environment/air/cleaner_air/
+
+n the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+plot(cars)
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
