@@ -539,6 +539,8 @@ down_eurostat("met_lfu3rt") -> unemp_rate_N4
 
 - Unemployment by sex, age, country of birth and NUTS 2 regions (imperfect but improvable) - Thousands persons
 
+(Big source of labor data: https://ec.europa.eu/eurostat/web/lfs/data/database (LFS Regional series))
+
 ```{r}
 down_eurostat("lfst_r_lfu2gac") -> unemp_age_origin
 
@@ -574,7 +576,7 @@ unemp_age_origin <- unemp_age_origin %>%
 
 unemp_age_origin %>% head()
 
-write.csv(unemp_age_origin, "data/eurostat/unemp_age_origin_nuts2.csv")
+# write.csv(unemp_age_origin, "data/eurostat/unemp_age_origin_nuts2.csv")
 ```
 
 ```{r}
@@ -605,7 +607,7 @@ temp <- unemp_r_age %>%
 
 temp %>% head()
 
-write.csv(temp, "data/eurostat/unemprate_age_sex_nuts2.csv")
+# write.csv(temp, "data/eurostat/unemprate_age_sex_nuts2.csv")
 ```
 
 
@@ -630,7 +632,7 @@ investment_capital_nuts2 <- investment_capital_nuts2 %>%
 
 investment_capital_nuts2
 
-write.csv(investment_capital_nuts2, "data/eurostat/investment_capital_nuts2.csv")
+# write.csv(investment_capital_nuts2, "data/eurostat/investment_capital_nuts2.csv")
 
 ```
 
@@ -640,7 +642,7 @@ write.csv(investment_capital_nuts2, "data/eurostat/investment_capital_nuts2.csv"
 
 down_eurostat("lfst_r_lfp2act") -> ActPop_age_N2
 
-write.csv(ActPop_age_N2, "data/eurostat/active_pop_age_sex_N2.csv")
+# write.csv(ActPop_age_N2, "data/eurostat/active_pop_age_sex_N2.csv")
 ```
 
 Economically active population by sex and age	EU	Metropolitan Regions	2002	2018	1 year	Eurostat	(imperfect)
@@ -654,7 +656,7 @@ Compensation of employees (SAL, not EMP) (wages) by NACE activity	EU	NUTS 2	2000
 ```{r}
 down_eurostat("nama_10r_2coe") -> Comp_emp_Nace_N2
 
-write.csv(Comp_emp_Nace_N2, "data/eurostat/compensation_emp_nace_n2.csv")
+# write.csv(Comp_emp_Nace_N2, "data/eurostat/compensation_emp_nace_n2.csv")
 ```
 
 
@@ -668,7 +670,7 @@ Science and tech Statistics:
 
 
 down_eurostat("ipr_da_reg") -> cd_appl
-write.csv(cd_appl, file = "data/eurostat/eurostat_cd_appl.csv")
+# write.csv(cd_appl, file = "data/eurostat/eurostat_cd_appl.csv")
 
 ### 
 down_eurostat("pat_ep_rtot")  -> e_patent_epo
@@ -687,19 +689,19 @@ Demografic Statistics:
 
 ```{r}
 #  total average pop to calculate gdp 
-# (INCOMPLETE FRANCE AND OTHERS)
+# (INCOMPLETE FRANCE AND OTHERS) -> # demo_r_pjanaggr3 (below) solves it
 
-down_eurostat("nama_10r_3popgdp")  -> e_pop_gdp
-
-write.csv(e_pop_gdp, file = "data/eurostat/eurostat_pop_gdp.csv")
+# down_eurostat("nama_10r_3popgdp")  -> e_pop_gdp 
+# write.csv(e_pop_gdp, file = "data/eurostat/eurostat_pop_gdp.csv")
 
 
 down_eurostat("demo_r_births")  -> e_births
 write.csv(e_births, file = "data/eurostat/eurostat_births.csv")
 
-down_eurostat("demo_r_find3")  -> e_fert
-table(e_fert$indic_de)
-write.csv(e_fert, file = "data/eurostat/eurostat_fert.csv")
+# # Only from 2013!!
+# down_eurostat("demo_r_find3")  -> e_fert
+# table(e_fert$indic_de)
+# write.csv(e_fert, file = "data/eurostat/eurostat_fert.csv")
 
 down_eurostat("demo_r_deaths")  -> e_deaths
 write.csv(e_deaths, file = "data/eurostat/eurostat_deaths.csv")
@@ -763,7 +765,7 @@ get_eurostat("urb_leduc") -> e_urb_leduc
 e_urb_leduc <- e_urb_leduc %>% 
   filter(indic_ur %in% c("TE2025V", "TE2028V", "TE2031V"))
 # With missing data
-
+e_pop_educ_2001
 ```
 _Note_:It is possible to have the GEOSTAT population grid from 2006 and 2011.
 

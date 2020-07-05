@@ -8,7 +8,7 @@ output: html_document
 Intro:
 
 ```{r message=FALSE, warning=FALSE}
-setwd("~/A - Estudios/LSE_ASDS/Project/PM2.5/Data Europe")
+# setwd("~/A - Estudios/LSE_ASDS/Project/PM2.5/Data Europe")
 
 library(tidyverse)
 library(dplyr)
@@ -149,36 +149,18 @@ lez_data %>%
 # ggplot(lez_data2) + geom_sf()
 leaflet() %>% addTiles() %>%
   addPolygons(data = as(lez_data, 'Spatial'), weight = 6, col = "red")
-mapview(as(lez_data, 'Spatial'))
-
 # Save the shape file!!
 
-st_write(lez_data2, "lez_data2.shp")
+# st_write(lez_data2, "data/lez_data2/lez_data2.shp")
 methods(class = "sf")
 
 ```
 
-## Try to read the saved shapefile (no success for now)
-
-```{r}
-lez_data2 <- readOGR(dsn = "lez_data2.shp")
-lez_data2 %>% st_sf()
-
-plot(lez_data2)
-
-lez_data2$name
-class(lez_data2)
-
-lez_data2@data
-
-ggplot(lez_data2) + geom_sf()
-
-leaflet() %>% addTiles() %>%
-  addPolygons(data = as(lez_data2, 'Spatial'), weight = 6, col = "red")
-mapview(as(lez_data2, 'Spatial'))
-```
-
 ---
+
+Extras and "useless" code
+
+<!-- COMMENT EVERYTHING BELLOW
 
 ```{r}
 # Add projection to geometries

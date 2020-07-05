@@ -58,7 +58,7 @@ library(lubridate)
 ```{r}
 # Characteristics of nuts3:
 
-nuts.sf <- read_sf("data/nuts_sf")
+nuts.sf <- readRDS("data/nuts_sf_final")
 
 nuts.sf <- nuts.sf %>%
   dplyr::rename(
@@ -66,14 +66,14 @@ nuts.sf <- nuts.sf %>%
     nuts_level = LEVL_CODE,
     country = CNTR_CODE,
     nuts_name = NUTS_NAME,
-    min_time_gz = min_time
-  ) %>% # Create a "never treated" and "always treated" variable
-  mutate(
-    appl_never = ifelse(appl_uar == 0 & appl_gz == 0, 1, 0),
-    appl_sure = appl_uar*appl_gz,
-    min_year_gz = as.character(min_time_gz) %>% 
-           substr(1,4) %>% as.numeric() # year
-  )
+    # min_time_gz = min_time
+  ) # Create a "never treated" and "always treated" variable
+  # mutate(
+  #   appl_never = ifelse(appl_uar == 0 & appl_gz == 0, 1, 0),
+  #   appl_sure = appl_uar*appl_gz,
+  #   min_year_gz = as.character(min_time_gz) %>% 
+  #          substr(1,4) %>% as.numeric() # year
+  # )
 
 nuts.sf %>% as.data.frame() %>% head()
 ```
@@ -96,7 +96,8 @@ Tables:
 
 ```{r}
 dta <- dbGetQuery(db, "SELECT * from nuts_time")
-dta %>% head()
+dta %>% filter(time == 2006)
+dta %>% names()
 ```
 
 Create variables of interest (outcomes and controls)
@@ -192,49 +193,7 @@ dta %>% names()
 ```
 
 
-### Data from Eurostat:
 
-```{r}
-gdp <- dbGetQuery(db, "SELECT geo, time, gdp_eur_hab
-                  FROM nuts_time")
-
-gdp %>% summary
-# emp %>% summary
-
-gdp_wide <- gdp %>% 
-  select(gdp_eur_hab, geo, time) %>%
-  pivot_wider(names_from = time, values_from = gdp_eur_hab)
-
-gdp_wide %>% head(100)
-
-
-# emp_wide <- emp %>% 
-#   filter(time == 2017,
-#          wstat == "Employed persons") %>%
-#   select(nace_r2, values, geo) %>%
-#   pivot_wider(names_from = nace_r2, values_from = values)
-
-# Why aren't they of the same length? ¿is it turkey?
-length(unique(gdp$geo))
-length(unique(nuts.sf$NUTS_ID))
-
-
-nuts.sf.data <- nuts.sf %>%
-  # left_join(emp_wide, by = c("NUTS_ID" = "geo")) %>%
-  left_join(gdp_wide, by = c("geo" = "geo"))
-
-# Which cities do I have data of?
-nuts.sf.data %>% as.data.frame() %>%
-  filter(is.na(`2001`) == FALSE) %>%
-  select(country) %>%
-  table()
-# NO DATA OF: AL, Switzerland/CH, IS, LI, ME, NO, RS, TR
-
-plot(nuts.sf.data["2016"], 
-     xlim = c(0, 20), ylim = c(30, 70))
-
-nuts.sf.data %>% as.data.frame() %>% head(100)
-```
 
 
 
@@ -438,12 +397,6 @@ panelView(month ~ status, data = panel_zones,
 ```
 
 (Image saved in png file)
-
-### Data from Pollution:
-
-```{r}
-
-```
 
 
 ### I need to exclude some other zones in the control pool with respect to geographical closeness:

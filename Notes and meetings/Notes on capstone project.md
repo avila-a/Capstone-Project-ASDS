@@ -1,6 +1,4 @@
-
-
-## Notes on capstone project
+Notes on capstone project
 
 
 
@@ -70,16 +68,16 @@ GET DATA
       - [x] Employed population / economic sector (Employment)
       - [ ] Hours worked / economic sector (NUTS 2)
         - [x] For all countries but France and Poland, getting it soon
-      - [ ] Unemployment (NUTS 2  - only from 2006)
+      - [x] Unemployment (NUTS 2)
       - [x] Working age population (age distribution - NUTS 3)
         - [x] Active population by age and sex (NUTS 2)
       - [x] Total population
 
     - [ ] MEDIATOR
 
-      - [ ] yearly pollution means
+      - [x] yearly pollution means
 
-      - [ ] Calculation for NUTS2 missing (in Create SQL)
+      - [x] Calculation for NUTS2 (in Create SQL)
 
         - [ ] **(extra)** Number of peaks and "high pollution episodes"
 
@@ -122,7 +120,10 @@ GET DATA
       - [x] perimeter of cities
       - [ ] (not yet calculated)
 
-- [ ] Find the name of the city that had an specially bad effect (small city in the border)
+- [ ] Choose which Cities I will start with
+
+  - [ ] Choose based on Relevance, if it's NUTS2, better, If I have the geography, better.
+  - [ ] Find the name of the city that had an specially bad effect (small city in the border)
 
 - [ ] Review that all sources and statistics make sense in size and in interpretation.
 
@@ -135,19 +136,20 @@ CLEAN DATA, SUMMARY STATISTICS
 - [ ] Information for selection of control regions
   - [x] NUTS 3 in the same NUTS 2 region
   - [ ] Are they going to change in time? (dynamic set of controls?) NO
-  - [ ] Discard Rhrine-Ruhr area as a control
-  - [ ] Create "distance to nearest LEZ" for each treatment region
-- [ ] Create a list of possible controls for each treated city
-  - [ ] Bound overall differences in levels of predictive variables (maximum and minimum)
+  - [x] Discard Rhrine-Ruhr area as a control
+  - [x] 
+- [ ] Create a **list of possible controls** for each treated city
+  - [ ] Bound overall differences in levels of predictive variables pre-intervention (maximum and minimum)
     - [ ] Restrict big relative or absolute differences in controls?
-    - [ ] Remove "rural" NUTS regions?
-  - [ ] Restrict cities outside 50-100km of a LEZ AND outside the same NUTS2 region (+ unite the Rhine-Ruhr area)
+    - [ ] Remove "rural" NUTS regions? (or those with different pop densities?)
+    - [ ] Remove very south-european / meditarranian economies?
+  - [x] Restrict cities outside 50-100km of a LEZ AND outside the same NUTS2 region (+ unite the Rhine-Ruhr area)
 - [ ] Review it is ready for analysis (clean and meaningful)
   - [ ] Re-run code to get data from Eurostat
 
 INTERMEDIATE TASK
 
-- [ ] Pull together a sketch of the outline and skeleton of the ideas on how to structure the paper with small resumes or ideas for him to criticize.
+- [ ] Pull together a **sketch of the outline** and skeleton of the ideas on how to structure the paper with small resumes or ideas for him to criticize.
 
 START ANALYSIS
 
@@ -186,6 +188,21 @@ AGOUST
 
 
 
+## Skeleton of paper
+
+### Tentative Index:
+
+1. Introduction 
+   1. Reasons for LEZ (Pollution -> health -> legislation -> objective is to reduce pollution)
+   2. Economic critiques of LEZ (Economy, Investment, )
+   3. Why and how (literature)  a reduction of pollution can improve the economy? (theory of change)
+   4. My question, Does this apply to LEZ (does pollution mediates...)?
+2. Data Sources / Analysis techniques /
+3. Results
+4. Conclusions
+
+
+
 ## Notes on things to remember:
 
 Pollution as a mediator:
@@ -216,7 +233,7 @@ Pollution as a mediator:
 
 * Should I put everything in **relative terms (rates) instead of overall values?** This increases the common support.
   * Does this decrease its credibility to you?
-  * *Alasdair: If its hard to create a berlin. Make a STRONG case. JSUTIFY everything, why are you taking relative or absolute rates. ¿do both? You con test different ways an analysis can be done and how this affects the results.*
+  * *Alasdair: If its hard to create a berlin. Make a STRONG case. JUSTIFY everything, why are you taking relative or absolute rates. ¿do both? You con test different ways an analysis can be done and how this affects the results.*
 
  
 

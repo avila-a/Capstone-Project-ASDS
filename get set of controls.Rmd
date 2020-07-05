@@ -1,0 +1,113 @@
+---
+title: "Get set of controls"
+author: '41783'
+date: "25/06/2020"
+output: 
+  html_notebook:
+    code_folding: show
+    # keep_md: true
+    df_print: paged
+---
+
+```{r message=FALSE, warning=FALSE}
+# setwd("~/A - Estudios/LSE_ASDS/Project/PM2.5/Data Europe")
+
+library(tidyverse)
+library(dplyr)
+
+library(sf)
+
+library(ggmap) #To have backgrownd images
+# library(mapview)
+
+library(leaflet)
+
+```
+
+
+Import data:
+
+I need to create for each NUTS3 and NUTS 2 region:
+
+- Is treated? (this NUTS2/NUTS3 region)
+  + NEED: geo(NUTS), treatment status(NUTS), extent of city / NUTS
+- Set of possible controls (distance to LEZ, inclusion in the same NUTS 2)
+  + Get geographies of all LEZ, and if not the extension of city from Eurostat
+    - NEED: LEZ extensions, treatment status (NUTS), Cities extensions
+  + Restrict NUTS regions:
+    - simple_control = outside 50km and oustside NUTS2
+    - restricted_control = outside 100km and outside NUTS 2
+
+
+## Is treated? (this NUTS2/NUTS3 region)
+
+The issue is that 
+
+* I have good treatment status of points but cities are big enough to cover more than one NUTS region, So I have to include all NUTS regions in contact with the city as treated (or as not-controls)
+
+### Read shapefile of LEZ:
+
+```{r}
+lez_shapes <- read_sf("data/lez_data2") %>%
+  st_make_valid()
+
+# ggplot(lez_shapes) + geom_sf()
+
+# leaflet() %>% addTiles() %>%
+#   addPolygons(data = lez_shapes, weight = 6, col = "red")
+```
+
+### NUTS geographies and treatment status:
+
+```{r}
+# Characteristics of ONLY Nuts 3:
+nuts.sf <- read_sf("data/nuts_sf")
+
+nuts.sf <- nuts.sf %>%
+  dplyr::rename(
+    geo = NUTS_ID,
+    nuts_level = LEVL_CODE,
+    country = CNTR_CODE,
+    nuts_name = NUTS_NAME,
+    min_time_gz = min_time
+  ) %>% # Create a "never treated" and "always treated" variable
+  mutate(
+    appl_never = ifelse(appl_uar == 0 & appl_gz == 0, 1, 0),
+    appl_sure = appl_uar*appl_gz,
+    min_year_gz = as.character(min_time_gz) %>% 
+           substr(1,4) %>% as.numeric() # year
+  )
+
+nuts.sf %>% as.data.frame() %>% head()
+
+nuts.sf %>% arrange(geo, country)
+
+ggplot(nuts.sf %>%
+         filter(country == "DE")) + geom_sf()
+```
+
+Review no shape of LEZ from OSM is in a zone classified as non-treated
+
+```{r}
+
+temp <- st_intersection(nuts.sf, lez_shapes)
+nuts_that_have_lez <- temp$geo %>% unique()
+
+# index_nuts_that_have_lez <- st_intersects(
+#   nuts.sf, lez_shapes, sparse = FALSE
+# ) %>%
+#   rowSums()
+# 
+# index_nuts_that_have_lez <- (index_nuts_that_have_lez != 0)
+
+leaflet() %>% addTiles() %>%
+  addPolygons(data = lez_shapes, weight = 6, col = "red") %>%
+  addPolygons(data = nuts.sf %>%
+         filter(geo %in% nuts_that_have_lez), col = "blue") %>%
+  addPolygons(data = nuts.sf %>%
+         filter(appl_sure == 1), col = "green")
+
+ggplot(nuts.sf %>%
+         filter(geo %in% nuts_that_have_lez)) + geom_sf()
+
+```

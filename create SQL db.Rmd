@@ -470,9 +470,9 @@ dbWriteTable(db, "nuts_time",
 ```{r}
 umweltzonen <- readxl::read_excel(
   "data/umweltbundesamt/umweltzonen.xlsx", 
-                                  skip = 1)[,1:7]
+                                  skip = 1)[,1:8]
 
-names(umweltzonen) <- c("State", "LEZ", "Status", 
+names(umweltzonen) <- c("State", "LEZ", "simple_LEZ", "Status", 
                         "Stage_1", "Stage_2", "Stage_3",
                         "Announcment")
 

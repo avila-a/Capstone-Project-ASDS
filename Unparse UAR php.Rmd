@@ -19,6 +19,7 @@ library(jsonlite)
 library(tidyverse)
 library(rvest)
 library("rgdal") # ReadOGR
+library(sf)
 # setwd("~/A - Estudios/LSE - Applied Social Data Science/Project/PM2.5/Data Europe/")
 ```
 
@@ -27,7 +28,7 @@ library("rgdal") # ReadOGR
 1. Read the data:
 
 ```{r}
-uar <- read_json(path = "Urb. Access Reg data mapapi.txt", 
+uar <- read_json(path = "data/Urb. Access Reg data mapapi.txt", 
                       simplifyVector = TRUE)[[1]]
 # "Low Emission Zone in place since the 1st" (or similar, say the day of the beguinning.)
 uar %>% head(2)
@@ -73,10 +74,15 @@ Read the scheme data
 
 ```{r}
 # This gives me the lists of names and their Ids
-allscheme <- read_json(path = "AllScheme.txt", 
+allscheme <- read_json(path = "data/AllScheme.txt", 
                        simplifyVector = TRUE)[[1]]
-write.csv(x = uar, file = "UAR_data/uar.csv")
-write.csv(x = allscheme, file = "UAR_data/id_name_pairs.csv")
+allscheme %>% head()
+```
+
+
+```{r}
+# write.csv(x = uar, file = "data/UAR_data/uar.csv")
+# write.csv(x = allscheme, file = "data/UAR_data/id_name_pairs.csv")
 ```
 
 
@@ -85,7 +91,7 @@ write.csv(x = allscheme, file = "UAR_data/id_name_pairs.csv")
 ```{r}
 library(DBI)
 con <- dbConnect(RSQLite::SQLite(), 
-                 dbname = "Greenzonesapp/db_greenzones.db")
+                 dbname = "data/Greenzonesapp/db_greenzones.db")
 
 # Explore:
 dbListTables(con)
@@ -164,64 +170,163 @@ Objective:
 
 # Source: https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/administrative-units-statistical-units/nuts
 # (higher quality available)
-basis <- "~/A - Estudios/LSE_ASDS/Project/PM2.5/NUTS3/"
-e2016 <- "ref-nuts-2016-01m"
-e2006 <- "ref-nuts-2006-01m"
-wd2016 <- paste(basis, e2016, sep = "")
-wd2006 <- paste(basis, e2006, sep = "")
+
+# Read NUTS 1,2 and 3 zones from original file, filter to only nuts 2 ans 3 and correct it:
+nuts.sf <- read_sf("data/NUTS3/ref-nuts-2016-01m") %>%
+  select(-FID) %>%
+  filter(LEVL_CODE %in% c(2, 3)) %>%
+  st_make_valid()
+
+Encoding(nuts.sf$NUTS_NAME) <- "UTF-8"
+
+nuts.sf %>% as.data.frame() %>% head()
+```
+
+## Convert data from cities into geolocations:
+
+#### From UAR:
+
+```{r}
+uar <- uar %>% arrange(scheme_color) # to improve the map
+
+# (points)
+uar_sf <- st_as_sf(uar, coords = c("city_longitude", "city_latitude"), 
+                   crs = "+proj=longlat +datum=WGS84 +no_defs")
+
+uar_sf %>% as.data.frame() %>% head()
+```
 
 
-shData2016 <- readOGR(wd2016,
-                      "NUTS_RG_01M_2016_4326")
-shData2016 <- spTransform(shData2016, 
-                          CRS("+proj=longlat +datum=WGS84 +no_defs"))
+**Restrict UAR to "Real" controls and not every kind of access regulations:**
 
-# class(shData2016)
+(info from https://urbanaccessregulations.eu/userhome/map)
 
-NUTS1_16 <- shData2016[shData2016$LEVL_CODE == 1, ]
-NUTS2_16 <- shData2016[shData2016$LEVL_CODE == 2, ]
-NUTS3_16 <- shData2016[shData2016$LEVL_CODE == 3, ]
-class(NUTS3_16)
+* Delete all access regulations in Poland (other access regulations are very week and LEZ in krakovia is implemented after 2018)
+* delete all access regulations in 
+  + Bucarest, Budapest, Sofía, Suceava, Salsburg
+    - (very week, only to heavy trucks > 5 to 8 tones)
+* delete all pollution emergency schemes (only 5-10 that do not coincide with a LEZ) (I am looking at average pollution)
+* try to eliminate as much "late" LEZ:
+  + Barcelona 
+* try to eliminate as much "week" "other urban access regulations:
+  + Dublin (only heavy vehicles),
+  + Groningen (only 1 pedestrian street)
+  + Würzburg (only heavy ~ >3.5T vehicles)
+  
+```{r}
+uar_sf <- uar_sf %>%
+  # Delete cities that I have reviewed the regulations are very week
+  filter(!str_detect(cityname, "Budapest"),
+         !str_detect(cityname, "Sofia"),
+         !str_detect(cityname, "Bucharest"),
+         !str_detect(cityname, "Suceava"),
+         !str_detect(cityname, "Salzburg"),
+         !str_detect(cityname, "Dublin"),
+         !str_detect(cityname, "Groningen"),
+         !str_detect(cityname, "Würzburg"),
+         # Polish cities
+         !str_detect(cityname, "Poznan"),
+         !str_detect(cityname, "Wroclaw"),
+         !str_detect(cityname, "Lodz"),
+         !str_detect(cityname, "Gdynia"),
+         !str_detect(cityname, "Warsawa"),
+         # UK cities
+         !str_detect(cityname, "Norwich"),#  (only an old castle)
+         !str_detect(cityname, "Leicester"),#  LEZ (planned in 2026)
+         !str_detect(cityname, "Manchester"),#  (planned by 2021)
+         !str_detect(cityname, "Mersey River"),# Mersey River Crossings
+         !str_detect(cityname, "Leeds"),#  (supposed 2020, now delayed)
+         !str_detect(cityname, "Glasgow"),# (came into effect 31 december 2018, too late, and will be fully implemented in 2022)
+         !str_detect(cityname, "Edinburgh"),#  (not yet applied)
+         !str_detect(cityname, "Dundee"),#  (same)
+         !str_detect(cityname, "Aberdeen"),#  (same) 
+         !str_detect(cityname, "Nottingham"), # not really there 
+         !str_detect(cityname, "Bath"), # in 2020
+         !str_detect(cityname, "Brighton"), # only buses
+         # Germany
+         !str_detect(cityname, "Hamburg"), # only 2 streets in 2018
+         # Denmark
+         !str_detect(cityname, "Århus"), # from 2020
+         ) %>%  
+  # Delete pollution emergencies schemes
+  filter(em_scheme == FALSE) %>%
+  # Delete "late" LEZ 
+  filter(!str_detect(cityname, "Barcelona"), # applied in 2020
+         !str_detect(cityname, "Bordeaux"), # expected to be applied...
+         !str_detect(cityname, "Birmingham",) # expected to be applied...
+         )
 
-NUTS3_16@data <- NUTS3_16@data %>%
-  mutate(NUTS_NAME = NUTS_NAME %>% as.character())
+## To check if names work
+uar_sf %>% as.data.frame() %>%
+  filter(str_detect(cityname, "Århus"))
+uar_sf$scheme %>% table()
+```
 
-Encoding(NUTS3_16@data$NUTS_NAME) <- "UTF-8"
+#### From GreenZones:
 
-NUTS3_16@data %>% head()
+```{r}
+gzones_sf <- st_as_sf(zones, coords = c("lon", "lat"), 
+                   crs = "+proj=longlat +datum=WGS84 +no_defs")
+
+gzones_sf$geometry[155] <- st_point(c(18.0280074, 59.3359563))
+```
+
+
+Clean gzones_sf of zones that are not really low emission zones and are week enough not to be considered as controls:
+
+* Delete gygantic french zones that are only emergency access regulations:
+  +  When high limits of PM10 are passed (>50microg and > 80microg) the organism responsible for the air can impose a ban on some cars in the limits it decides.
+  + Looking at some examples (http://www.airpl.org/Air-exterieur/alertes-pollution) car restrictions have NOT been issued repeteadly (or at all) in the last years.
+* Delete zones in place after 2018 (or 2019)?
+
+
+```{r}
+gzones_sf <- gzones_sf %>%
+  # Delete cities that I have reviewed the regulations are very week
+  ## French regions
+  filter(!str_detect(Bild, "Atlantiques"),
+         !str_detect(Bild, "Gers"),
+         !str_detect(Bild, "Gironde"),
+         !str_detect(Bild, "Vendee"),
+         !str_detect(Bild, "Deux"),
+         !str_detect(Bild, "Vienne"),
+         !str_detect(Bild, "Herault"),
+         !str_detect(Bild, "Maine"),
+         !str_detect(Bild, "Creuse"),
+         !str_detect(Bild, "Maine"),
+         !str_detect(Bild, "Puy"),
+         !str_detect(KML, "FrankreichLoireZPA"),
+         !str_detect(KML, "Eure"),
+         !str_detect(KML, "Loiret"),
+         !str_detect(KML, "Cote"),
+         !str_detect(KML, "Drome"),
+         !str_detect(KML, "Isere"),
+         !str_detect(KML, "Savoie"),# x2
+         !str_detect(KML, "Rennes"),
+         # UK
+         !str_detect(KML, "Norwich"), 
+         !str_detect(KML, "Nottingham"), 
+         !str_detect(KML, "Brighton"), # only buses
+         # New to add: 
+         # Check those in Austria
+         # !str_detect(KML, "Oberoesterreich"), # A highway
+         ) %>%
+  # Delete cities that have not already applied a LEZ
+  filter(InPlaceSince <= as.Date("2018-01-01"), # Before 2018
+         !str_detect(KML, "Valladolid"), # https://www.elnortedecastilla.es/valladolid/valladolid-disenara-zona-20200303071026-nt.html?ref=https:%2F%2Fwww.elnortedecastilla.es%2Fvalladolid%2Fvalladolid-disenara-zona-20200303071026-nt.html
+         !str_detect(KML, "Valencia")
+  )
+
+# gzones_sf %>%
+#   filter(str_detect(KML, "Brighton"))
 ```
 
 
 ```{r}
-# Convert data from cities into geolocations:
-## From UAR:
-
-uar <- uar %>% arrange(scheme_color) # to improve the map
-
-# (points)
-uar_sp <- SpatialPointsDataFrame(
-  coords = cbind(uar$city_longitude, uar$city_latitude),
-  data = uar 
-)
-
-# uar$points <- SpatialPoints(cbind(uar$city_latitude, uar$city_longitude))
-proj4string(uar_sp) <- CRS("+proj=longlat +datum=WGS84 +no_defs")
-
-# NUTS3_16 <- spTransform(NUTS3_16, 
-                        # CRS("+proj=longlat +datum=WGS84 +no_defs"))
-
-## From GreenZones:
-# (points)
-gzones_sp <- SpatialPointsDataFrame(
-  coords = cbind(zones$lon, zones$lat),
-  data = zones
-)
-
-gzones_sp@coords[155,] <- c(18.0280074, 59.3359563)
-proj4string(gzones_sp) <- CRS("+proj=longlat +datum=WGS84 +no_defs")
-
 # (polygons)
 # 1. Create a list of polygons with the latitudes and longitudes
+zones <- gzones_sf %>% as.data.frame() %>% dplyr::select(-geometry)
+
 zones_polygons <- apply(
   X = t(zones[c("MinLongitude", "MinLatitude",
                 "MaxLongitude", "MaxLatitude")]),
@@ -247,6 +352,8 @@ sps = SpatialPolygons(p1,
 gzones_sp_pol <- SpatialPolygonsDataFrame(sps,
                                           data = zones)
 
+gzones_sf_pol <- st_as_sf(gzones_sp_pol)
+
 # { # Old static map
 #   plot(uar_sp, col = "blue")
 #   plot(NUTS3_16, add = TRUE)
@@ -262,196 +369,450 @@ col_size <- c(4,3,1,2)
 
 policy_map <- leaflet() %>% 
   addTiles() %>% 
-  addPolygons(data = NUTS3_16,
+  addPolygons(data = nuts.sf,
               color = "black",
               weight = 1,
               # opacity = NA,
               fill = NA) %>%
   addPolygons(
-    data = gzones_sp_pol,
-    popup = paste0("<b> Name: </b>", gzones_sp_pol$KML,  
-                   "<br/> <b> In place since: </b>", gzones_sp_pol$InPlaceSince, 
-                   "<br/> <b> Country: </b>", gzones_sp_pol$TitelLocal,
+    data = gzones_sf_pol,
+    popup = paste0("<b> Name: </b>", gzones_sf_pol$KML,  
+                   "<br/> <b> In place since: </b>", gzones_sf_pol$InPlaceSince, 
+                   "<br/> <b> Country: </b>", gzones_sf_pol$TitelLocal,
                    "<br/> <b> Source: </b> GreenZonesApp")) %>%
   addCircleMarkers(
-    data = uar_sp, weight = NA,
+    data = uar_sf, weight = NA,
     opacity = 0.1,
     color = NA,
-    fillColor = col_map[uar_sp$scheme_color],
+    fillColor = col_map[uar_sf$scheme_color],
     fillOpacity = 0.9,
-    radius = col_size[uar_sp$scheme_color]*2,
-    popup = paste0("<b>", uar_sp@data$cityname, "</b> <br/>",
-                   "<b> Scheme: </b>", uar_sp$scheme, "<br/>",
+    radius = col_size[uar_sf$scheme_color]*2,
+    popup = paste0("<b>", uar_sf$cityname, "</b> <br/>",
+                   "<b> Scheme: </b>", uar_sf$scheme, "<br/>",
                    "<b> Source: </b> U.A.R")
     )
 
-policy_map
+# policy_map
 
-# htmlwidgets::saveWidget(policy_map, file="policy_map.html")
-
+htmlwidgets::saveWidget(policy_map, file="policy_map.html")
+# getwd()
 ```
 
+#### From Umweltbundesamt
 
 ```{r}
-# Include if a NUTS region is included in gzones or uar.
-gzones_sp_pol %>% head() %>% as.data.frame()
+db <- dbConnect(RSQLite::SQLite(), "data/capstonedb")
+umweltzonen <- dbGetQuery(db, "SELECT * from umweltzonen")
+dbDisconnect(db)
+umweltzonen %>% head()
+# umweltzonen %>% dim()
 ```
+
+```{r}
+# # Change names so they are searchable
+# names_changed <- sub(" *\\ .*", "", umweltzonen$LEZ)
+# names_changed <- sub(" *\\(.*", "", names_changed)
+
+# Get coordinates of each name
+temp <- list()
+for (i in 1:length(umweltzonen$LEZ)){
+  lala <- osmdata::getbb(umweltzonen$simple_LEZ[i])%>%
+    apply(1, mean)
+  temp[[i]] <- lala
+}
+temp2 <- lapply(temp, as.data.frame)
+temp2 <- lapply(temp2, rownames_to_column, var = "latlong")
+temp2[[1]]
+temp2 <- data.table::rbindlist(temp2, use.names = FALSE)
+temp2$id <- rep(x = 1:58, 2) %>% sort()
+temp2 <- temp2 %>% pivot_wider(names_from = "latlong",
+                      values_from= "X[[i]]")
+
+umweltzonen <- umweltzonen %>% cbind(temp2[, c("x", "y")])
+umweltzonen <- st_as_sf(umweltzonen, coords = c("x", "y"),
+                 crs = "+proj=longlat +datum=WGS84 +no_defs")
+umweltzonen %>% names()
+umweltzonen
+```
+
+### Create multiple sets of controls: 
+
+Idea: 1 Delete UAR that are inside a given Green Zones buffer zone, 2. Include as controls of a given city those hat have never implemented lez or those that have not yeat implemented them. if there is no info they are not included. This could increase the set of controls for "early" LEZ in germany.
 
 
 Unite city-points/zones with the databases of characteristcs
 
 ```{r}
-# To unite them I found out a wat to do it with "sf" so I convert them into sf and then go back.
 
-library(sf)
+# nuts.sf <- nuts.sf %>% st_make_valid()
+# uar_sf <- uar_sf %>% st_make_valid()
+# gzones_sf <- gzones_sf %>% st_make_valid()
+# gzones_sf_pol <- gzones_sf_pol %>% st_make_valid()
 
-# Convert to sf-objects
-nuts.sf <- st_as_sf(NUTS3_16)
-uar_points.sf <- st_as_sf(uar_sp)
-gzones_sp.sf <- st_as_sf(gzones_sp)
-gzones_sp_pol.sf <- st_as_sf(gzones_sp_pol)
+get_buffer_km <- function(data_points, km){
+  data_points %>%
+    st_transform(29902) %>% # Irish grid, that uses meters
+    st_buffer(dist = units::set_units(km, "km")) %>% # How big is the perimeter
+    st_transform(crs = "+proj=longlat +datum=WGS84")
+}
 
-# This keeps all the cities (regulations) and includes the LEZ zone in which they "intersect" (default) in and their characterisitics.
+buffer_50_uar <- get_buffer_km(uar_sf, 50)
 
-uar_points.sf_nuts <- st_join(uar_points.sf, nuts.sf) 
-gzones_sp.sf_nuts <- st_join(gzones_sp.sf, nuts.sf) 
-gzones_sp_pol.sf_nuts <- st_join(gzones_sp_pol.sf, nuts.sf) 
+# ! Note! I don't need to do a buffer of 50 and 100 km of small (city-center) urban access regulations.
+# I could restrict to do this for sizable LEZ
 
-# We can see the one with poligons has more rows
-lapply(list(gzones_sp.sf_nuts, gzones_sp_pol.sf_nuts), dim)
+nuts.sf <- nuts.sf %>%
+  mutate(
+    
+    # Controls by UAR 
+    with_uar_point = ifelse(
+      NUTS_ID %in% 
+        (st_intersection(
+          nuts.sf, uar_sf)$NUTS_ID %>% 
+           unique()),
+      TRUE, FALSE),
+    with_uar_50km = ifelse(
+      NUTS_ID %in% 
+        (st_intersection(
+          nuts.sf, get_buffer_km(uar_sf, 50))$NUTS_ID %>%
+           unique()),
+      TRUE, FALSE),
+    with_uar_100km = ifelse(
+      NUTS_ID %in% 
+        (st_intersection(
+          nuts.sf, get_buffer_km(uar_sf, 100))$NUTS_ID %>%
+           unique()),
+      TRUE, FALSE),
+    
+    # Controls by Green Zones app
+    with_gzones_point = ifelse(
+      NUTS_ID %in% 
+        (st_intersection(
+          nuts.sf, gzones_sf)$NUTS_ID %>% 
+           unique()),
+      TRUE, FALSE),
+    with_gzones_50km = ifelse(
+      NUTS_ID %in% 
+        (st_intersection(
+          nuts.sf,  get_buffer_km(gzones_sf, 50))$NUTS_ID %>%
+           unique()),
+      TRUE, FALSE),
+    with_gzones_100km = ifelse(
+      NUTS_ID %in% 
+        (st_intersection(
+          nuts.sf, get_buffer_km(gzones_sf, 100))$NUTS_ID %>%
+           unique()),
+      TRUE, FALSE),
+    
+    # Controls by Umweltzonen Locations
+    with_umweltzonen_point = ifelse(
+      NUTS_ID %in% 
+        (st_intersection(
+          nuts.sf, umweltzonen)$NUTS_ID %>% 
+           unique()), 
+      TRUE, FALSE),
+    with_umweltzonen_50km = ifelse(
+      NUTS_ID %in% 
+        (st_intersection(
+          nuts.sf, get_buffer_km(umweltzonen, 50))$NUTS_ID %>%
+           unique()), 
+      TRUE, FALSE),
+    with_umweltzonen_100km = ifelse(
+      NUTS_ID %in% 
+        (st_intersection(
+          nuts.sf, get_buffer_km(umweltzonen, 100))$NUTS_ID %>%
+           unique()),
+      TRUE, FALSE)
+  )
 
-# Look for Paris:
-lapply(list(gzones_sp.sf_nuts, gzones_sp_pol.sf_nuts), function(x){
-  as.data.frame(x) %>% 
-  filter(ElternzoneId == 22)  %>%
-  select(NUTS_NAME) %>% as.character()
-}) # The zones df includes all NUTS regions in contact with the zone!
+# + Include all cities mentioned in umweltbundesamt as non-controls
 
-# Note: This looks like be easily changed from "intersect" to "covers" or "is_within_distance"
-
-
-gzones_sp.sf_nuts %>% as.data.frame() %>% 
-  filter(ElternzoneId == 22)
-?st_join
-
-# st_contains(points.sf, nuts.sf)
-
-plot(uar_points.sf_nuts)
-plot(gzones_sp.sf_nuts)
-plot(nuts.sf$geometry)
-
-# Convert back to Spatial*
-uar_nuts <- as(uar_points.sf_nuts, "Spatial")
-gz_nuts <- as(gzones_sp.sf_nuts, "Spatial")
-# srdf_meuse <- as(srdf_meuse, "Spatial")
+ggplot(nuts.sf %>%
+         filter(with_uar_50km == TRUE)) +
+  geom_sf(aes(color = as.factor(LEVL_CODE))) +
+  geom_sf(data = buffer_50_uar) +
+  geom_sf(data = umweltzonen)
+```
 
 
-# Create a variable of minimum time for gzones (GZ):
-# The time the FIRST measure was applied.
-# Note: This is not perfect because it only includes the zone of the point and not every NUTS included in the LEZ.
-min_time <- gzones_sp.sf_nuts %>% as.data.frame() %>%
-      dplyr::group_by(NUTS_ID) %>% 
-      dplyr::summarise(min_time = min(InPlaceSince))
+### Get list of treated:
+
+Those NUTS regions that are INSIDE a OMS LEZ 
++ 
+those NUTS who are in the center of UAR (only LEZ)
++
+Those NUTS who are in the center of g_zones
++
+The geographical location of all cities named in Umweltbundesamt (Inagurated before XXX)
+-
+Restricted only to german cities (NUTS_ID starts by "DE")
+
+```{r}
+# import OMS LEZ geographies:
+lez_shapes <- read_sf("data/lez_data2") %>%
+  st_make_valid()
+
+## This is to try to avoid very "small" parts of a NUTS region inside a LEZ make them bain ategorized as "Treated". I could do this case by case too.
+# temp <- lez_shapes %>%
+#   st_transform(29902) %>% # Irish grid, that uses meters
+#   st_snap(nuts.sf, tolerance = units::set_units(2, "km")) %>%
+#   st_transform(crs = "+proj=longlat +datum=WGS84") 
+
+uar_sf_lez <- uar_sf %>% filter(lez == TRUE)
+
+nuts.sf <- nuts.sf %>%
+  mutate(
+    treated_osm = ifelse(
+      NUTS_ID %in% 
+        (st_intersection(
+          nuts.sf, lez_shapes)$NUTS_ID %>% 
+           unique()),
+      TRUE, FALSE),
+    treated_uar = ifelse(
+      NUTS_ID %in% 
+        (st_intersection(
+          nuts.sf, uar_sf_lez)$NUTS_ID %>% 
+           unique()),
+      TRUE, FALSE),
+    treated_gz = ifelse(
+      NUTS_ID %in% 
+        (st_intersection(
+          nuts.sf, gzones_sf)$NUTS_ID %>% 
+           unique()),
+      TRUE, FALSE),
+    treated_uz = ifelse(
+      NUTS_ID %in% 
+        (st_intersection(
+          nuts.sf, umweltzonen)$NUTS_ID %>% 
+           unique()),
+      TRUE, FALSE),
+  ) %>% # That are inside Germany, if not they are NOT treated:
+  mutate(
+    treated_osm = ifelse(CNTR_CODE == "DE", treated_osm, FALSE),
+    treated_uar = ifelse(CNTR_CODE == "DE", treated_uar, FALSE),
+    treated_gz = ifelse(CNTR_CODE == "DE", treated_gz, FALSE),
+    # treated_uz = ifelse(CNTR_CODE == "DE", treated_uz, FALSE)
+  ) %>%
+  mutate(
+    treated_any = treated_osm | treated_uar | treated_gz | treated_uz
+  )
+# + include locations of cities in umweltbundesamt
+
+# Treatment statuses mostly coincide
+nuts.sf %>% as.data.frame() %>%
+  select(treated_osm, treated_uar, treated_gz, treated_uz) %>%
+  table()
+
+treated_and_controls <- leaflet() %>% 
+  addTiles() %>%
+  addPolygons(data = nuts.sf %>%
+                filter(treated_any == TRUE), 
+              weight = 4, col = "red") %>%
+  addPolygons(data = lez_shapes, col = "green") %>%
+  addPolygons(data = nuts.sf %>%
+                filter(with_uar_50km == FALSE), col = "blue") %>%
+  addMarkers(data = umweltzonen,
+             popup = paste0(
+               "<b>", umweltzonen$LEZ, "</b> <br/>",
+               "<b> Start date: </b>", umweltzonen$Stage_1, "<br/>",
+               "<b> Source: </b> Umweltzonen"))
+
+treated_and_controls
+
+htmlwidgets::saveWidget(treated_and_controls,
+                        file="map_tr_and_controls_.html")
 ```
 
 ```{r}
-min_time
-```
+treated_and_controls_2 <- leaflet() %>% 
+  addTiles() %>%
+  addPolygons(data = nuts.sf %>%
+                filter(treated_any == TRUE,
+                       LEVL_CODE == 2), 
+              weight = 4, col = "red") %>%
+  addPolygons(data = lez_shapes, col = "green") %>%
+  addPolygons(data = nuts.sf %>%
+                filter(with_uar_50km == FALSE,
+                       LEVL_CODE == 2), col = "blue") %>%
+  addMarkers(data = umweltzonen)
 
-Temporal application of policies: When were LEZ applied?
-
-```{r, fig.height=12, fig.width= 9}
-all_times <- expand.grid(NUTS_ID = min_time$NUTS_ID, 
-                   year = seq(2005, 2020),
-                   month = seq(01, 12), 
-                   # month = c("01", "02", "03", "04", "05", "06",
-                   #          "07", "08", "09", "10", "11", "12"), 
-                   stringsAsFactors = FALSE)
-all_times
-
-panel_application <- all_times %>%
-  left_join(min_time) %>%
-  mutate(date = as.POSIXct(paste0(year,"-", month, "-01" )),
-         status = ifelse(date < min_time, 0, 1),
-         country = substr(NUTS_ID, 1, 2)) %>%
-  arrange(status) %>%
-  # mutate(ordered_factor = fct_inorder(NUTS_ID)) %>%
-  select(NUTS_ID, date, status, year, month, country)
-panel_application
+treated_and_controls_2
 ```
 
 
-```{r, fig.height=12, fig.width= 9}
-# png(filename = "UAR application Europe.png", 
-#     width = 750, height = 1200, res = 100)
-panelView::panelView(month ~ status, data = panel_application, 
-          index = c("NUTS_ID", "date"), 
-          by.timing = TRUE,
-          axis.lab.gap = c(23,0), 
-          # axis.lab = "time",
-          background = "white",
-          main = "",
-          xlab = "", ylab = "",)
-          #legend.labs = c("No LEZ applied", "Only red, yellow or green sticker", 
-                          # "Only yellow or green sticker", "Only green stiker"),
-          #color = c("grey90", "red1", "yellow1", "green4"))
-# dev.off()
-```
+<!-- ```{r} -->
+<!-- # This keeps all the cities (regulations) and includes the LEZ zone in which they "intersect" (default) in and their characterisitics. -->
+
+<!-- uar_points.sf_nuts <- st_join(uar_points.sf, uar_sf)  -->
+<!-- gzones_sp.sf_nuts <- st_join(gzones_sp.sf, nuts.sf)  -->
+<!-- gzones_sp_pol.sf_nuts <- st_join(gzones_sp_pol.sf, nuts.sf)  -->
+
+<!-- # We can see the one with poligons has more rows -->
+<!-- lapply(list(gzones_sp.sf_nuts, gzones_sp_pol.sf_nuts), dim) -->
+
+<!-- # Look for Paris: -->
+<!-- lapply(list(gzones_sp.sf_nuts, gzones_sp_pol.sf_nuts), function(x){ -->
+<!--   as.data.frame(x) %>%  -->
+<!--   filter(ElternzoneId == 22)  %>% -->
+<!--   select(NUTS_NAME) %>% as.character() -->
+<!-- }) # The zones df includes all NUTS regions in contact with the zone! -->
+
+<!-- # Note: This looks like be easily changed from "intersect" to "covers" or "is_within_distance" -->
 
 
+<!-- gzones_sp.sf_nuts %>% as.data.frame() %>%  -->
+<!--   filter(ElternzoneId == 22) -->
+<!-- ?st_join -->
 
-Map of LEZ zones affected:
-NOTE: Need to add ALL ZONES of a city that are affected. (use the bbox of one data or get the shapefiles of each zone)
+<!-- # st_contains(points.sf, nuts.sf) -->
+
+<!-- plot(uar_points.sf_nuts) -->
+<!-- plot(gzones_sp.sf_nuts) -->
+<!-- plot(nuts.sf$geometry) -->
+
+<!-- # Convert back to Spatial* -->
+<!-- uar_nuts <- as(uar_points.sf_nuts, "Spatial") -->
+<!-- gz_nuts <- as(gzones_sp.sf_nuts, "Spatial") -->
+<!-- # srdf_meuse <- as(srdf_meuse, "Spatial") -->
+
+
+<!-- # Create a variable of minimum time for gzones (GZ): -->
+<!-- # The time the FIRST measure was applied. -->
+<!-- # Note: This is not perfect because it only includes the zone of the point and not every NUTS included in the LEZ. -->
+<!-- min_time <- gzones_sp.sf_nuts %>% as.data.frame() %>% -->
+<!--       dplyr::group_by(NUTS_ID) %>%  -->
+<!--       dplyr::summarise(min_time = min(InPlaceSince)) -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- min_time -->
+<!-- ``` -->
+
+<!-- Temporal application of policies: When were LEZ applied? -->
+
+<!-- ```{r, fig.height=12, fig.width= 9} -->
+<!-- all_times <- expand.grid(NUTS_ID = min_time$NUTS_ID,  -->
+<!--                    year = seq(2005, 2020), -->
+<!--                    month = seq(01, 12),  -->
+<!--                    # month = c("01", "02", "03", "04", "05", "06", -->
+<!--                    #          "07", "08", "09", "10", "11", "12"),  -->
+<!--                    stringsAsFactors = FALSE) -->
+<!-- all_times -->
+
+<!-- panel_application <- all_times %>% -->
+<!--   left_join(min_time) %>% -->
+<!--   mutate(date = as.POSIXct(paste0(year,"-", month, "-01" )), -->
+<!--          status = ifelse(date < min_time, 0, 1), -->
+<!--          country = substr(NUTS_ID, 1, 2)) %>% -->
+<!--   arrange(status) %>% -->
+<!--   # mutate(ordered_factor = fct_inorder(NUTS_ID)) %>% -->
+<!--   select(NUTS_ID, date, status, year, month, country) -->
+<!-- panel_application -->
+<!-- ``` -->
+
+
+<!-- ```{r, fig.height=12, fig.width= 9} -->
+<!-- # png(filename = "UAR application Europe.png",  -->
+<!-- #     width = 750, height = 1200, res = 100) -->
+<!-- panelView::panelView(month ~ status, data = panel_application,  -->
+<!--           index = c("NUTS_ID", "date"),  -->
+<!--           by.timing = TRUE, -->
+<!--           axis.lab.gap = c(23,0),  -->
+<!--           # axis.lab = "time", -->
+<!--           background = "white", -->
+<!--           main = "", -->
+<!--           xlab = "", ylab = "",) -->
+<!--           #legend.labs = c("No LEZ applied", "Only red, yellow or green sticker",  -->
+<!--                           # "Only yellow or green sticker", "Only green stiker"), -->
+<!--           #color = c("grey90", "red1", "yellow1", "green4")) -->
+<!-- # dev.off() -->
+<!-- ``` -->
+
+
+<!-- Map of LEZ zones affected: -->
+<!-- NOTE: Need to add ALL ZONES of a city that are affected. (use the bbox of one data or get the shapefiles of each zone) -->
+
+<!-- ```{r} -->
+<!-- dta_uar <- uar_points.sf_nuts %>% as.data.frame() %>% -->
+<!--   select(NUTS_ID, NUTS_NAME, scheme) -->
+
+<!-- dta_gz <- gzones_sp.sf_nuts %>% as.data.frame() %>% -->
+<!--   select(NUTS_ID, NUTS_NAME, InPlaceSince) -->
+
+
+<!-- NUTS3_map <- NUTS3_16 -->
+<!-- NUTS3_map@data <- NUTS3_16@data %>% -->
+<!--   left_join(dta_uar) %>% -->
+<!--   left_join(dta_gz) -->
+
+<!-- library(tmap) -->
+<!-- library(leaflet) -->
+<!-- tm(temp, "scheme") -->
+<!-- qtm_lez <- tmap::qtm(temp, fill = "scheme",  -->
+<!--                      bbox = c(-10, 30, 50, 71),  -->
+<!--                      borders = NULL) -->
+
+<!-- ##  ESTO DA LOS LUGARES EQUIVOCADOS PERO ES UN BUEN INTENTO -->
+<!-- # leaflet() %>% addTiles() %>% -->
+<!-- #   addPolygons(data = NUTS3_map, -->
+<!-- #               popup = paste0("Name: ", NUTS3_map$NUTS_NAME), -->
+<!-- #               weight = 0.5, -->
+<!-- #               fill = NUTS3_map$scheme) -->
+
+<!-- qtm_lez -->
+<!-- tmap::tmap_leaflet(qtm_lez) -->
+<!-- ``` -->
+
+## 2 or 3 control statuses
 
 ```{r}
-dta_uar <- uar_points.sf_nuts %>% as.data.frame() %>%
-  select(NUTS_ID, NUTS_NAME, scheme)
-
-dta_gz <- gzones_sp.sf_nuts %>% as.data.frame() %>%
-  select(NUTS_ID, NUTS_NAME, InPlaceSince)
-
-
-NUTS3_map <- NUTS3_16
-NUTS3_map@data <- NUTS3_16@data %>%
-  left_join(dta_uar) %>%
-  left_join(dta_gz)
-
-library(tmap)
-library(leaflet)
-tm(temp, "scheme")
-qtm_lez <- tmap::qtm(temp, fill = "scheme", 
-                     bbox = c(-10, 30, 50, 71), 
-                     borders = NULL)
-
-##  ESTO DA LOS LUGARES EQUIVOCADOS PERO ES UN BUEN INTENTO
-# leaflet() %>% addTiles() %>%
-#   addPolygons(data = NUTS3_map,
-#               popup = paste0("Name: ", NUTS3_map$NUTS_NAME),
-#               weight = 0.5,
-#               fill = NUTS3_map$scheme)
-
-qtm_lez
-tmap::tmap_leaflet(qtm_lez)
+nuts.sf <- nuts.sf %>%
+  mutate(
+    contr_restr_point = case_when(
+      with_umweltzonen_point ~ FALSE,
+      with_gzones_point ~ FALSE,
+      with_uar_point ~ FALSE,
+      TRUE ~ TRUE # if none of the past conditions, it's a control
+    ),
+    contr_restr_50km = case_when(
+      with_umweltzonen_50km ~ FALSE,
+      with_gzones_50km ~ FALSE,
+      with_uar_50km ~ FALSE,
+      TRUE ~ TRUE # if none of the past conditions, it's a control
+    ),
+    contr_restr_100km = case_when(
+      with_umweltzonen_100km ~ FALSE,
+      with_gzones_100km ~ FALSE,
+      with_uar_100km ~ FALSE,
+      TRUE ~ TRUE # if none of the past conditions, it's a control
+    )
+  )
+nuts.sf %>% names()
 ```
+
 
 
 Include all relevant data in nuts.sf and save it.
 
 ```{r}
-# Mark NUTS 3 regions that have a city or point marked in eather UAR or GZ
-nuts.sf <- nuts.sf %>%
-  mutate(
-    appl_uar = NUTS_ID %in% uar_points.sf_nuts$NUTS_ID,
-    appl_gz = NUTS_ID %in% gzones_sp.sf_nuts$NUTS_ID
-    # min_apl_date = gzones_sp.sf_nuts$min_time
-  ) %>%
-  left_join(min_time) %>%
-  select(-c("FID")) # duplicated
+# # Mark NUTS 3 regions that have a city or point marked in eather UAR or GZ
+# nuts.sf <- nuts.sf %>%
+#   mutate(
+#     appl_uar = NUTS_ID %in% uar_points.sf_nuts$NUTS_ID,
+#     appl_gz = NUTS_ID %in% gzones_sp.sf_nuts$NUTS_ID
+#     # min_apl_date = gzones_sp.sf_nuts$min_time
+#   ) %>%
+#   left_join(min_time) %>%
+#   select(-c("FID")) # duplicated
 
-nuts.sf %>% as.data.frame() %>% head(20)
+nuts.sf %>% head(20)
+```
 
-st_write(obj = nuts.sf, "data/nuts_sf.shp", delete_layer = TRUE)
 
-# plot(nuts.sf %>% select(appl_uar))
+```{r}
+## st_write(obj = nuts.sf, "data/nuts_sf.shp", delete_layer = TRUE)
+
+# saveRDS(nuts.sf, "data/nuts_sf_final")
+# readRDS("data/nuts_sf_final")
 ```
 
