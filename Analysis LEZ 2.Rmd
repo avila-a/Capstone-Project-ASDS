@@ -56,7 +56,7 @@ library(lubridate)
 ```{r}
 # Characteristics of nuts3:
 
-nuts.sf <- readRDS("data/nuts_sf_final")
+nuts.sf <- readRDS("data/nuts_sf_treated")
 
 nuts.sf <- nuts.sf %>%
   dplyr::rename(
@@ -219,7 +219,7 @@ get_volatility <- function(data = dta,
 
 
 ```{r}
-temp2 <- get_volatility(data = temp, CNTR_CODE = "DE",
+temp2 <- get_volatility(data = dta, CNTR_CODE = "DE",
                        time_vector = 2000:2019,
                        variable = "unempR_T")
 # temp2
@@ -249,7 +249,7 @@ nuts_treated %>% as.data.frame() %>% head()
 ## Unite variables and treatment status:
 
 ```{r}
-temp <- nuts_treated %>% 
+main_dta <- nuts_treated %>% 
   as.data.frame() %>%
   select(-geometry) %>%
   right_join(dta, by = "geo")
@@ -257,74 +257,265 @@ temp <- nuts_treated %>%
 
 # Synthetic control method:
 
-* ! Note: 
-* ! This is being done with fake treatment groups that are really controls because the area was not taken into account.
-* !
+Manual: https://cran.r-project.org/web/packages/Synth/Synth.pdf
+
+<!-- ```{r} -->
+<!-- # install.packages("Synth") -->
+<!-- library(Synth) -->
+<!-- data(basque) -->
+<!-- basque -->
+
+<!-- dataprep.out <- -->
+<!--   dataprep( -->
+<!--     foo = basque -->
+<!--     # main predictors (cavariates) -->
+<!--     ,predictors= c("school.illit", -->
+<!--                    "school.prim", -->
+<!--                    "school.med", -->
+<!--                    "school.high", -->
+<!--                    "school.post.high" -->
+<!--                    ,"invest" -->
+<!--     ) -->
+<!--     ,predictors.op = c("mean") -->
+<!--     ,dependent = c("gdpcap") -->
+<!--     ,unit.variable = c("regionno") -->
+<!--     ,time.variable = c("year") -->
+<!--     # Those that are used as time variant predictors -->
+<!--     ,special.predictors = list( -->
+<!--       list("gdpcap",1960:1969,c("mean")), -->
+<!--       list("sec.agriculture",seq(1961,1969,2),c("mean")), -->
+<!--       list("sec.energy",seq(1961,1969,2),c("mean")), -->
+<!--       list("sec.industry",seq(1961,1969,2),c("mean")), -->
+<!--       list("sec.construction",seq(1961,1969,2),c("mean")), -->
+<!--       list("sec.services.venta",seq(1961,1969,2),c("mean")), -->
+<!--       list("sec.services.nonventa",seq(1961,1969,2),c("mean")), -->
+<!--       list("popdens",1969,c("mean"))) -->
+<!--     ,treatment.identifier = 17 -->
+<!--     ,controls.identifier = c(2:16,18) -->
+<!--     ,time.predictors.prior = c(1964:1969) -->
+<!--     ,time.optimize.ssr = c(1960:1969) -->
+<!--     ,unit.names.variable = c("regionname") -->
+<!--     ,time.plot = c(1955:1997) -->
+<!--   ) -->
 
 
-```{r}
-# install.packages("Synth")
-library(Synth)
-# data(basque)
-# basque
-# ?Synth::dataprep()
-# Synth::dataprep(foo = nuts_try, 
-#                 predictors = values, # This is wrong
-#                 dependent = values,
-#                 unit.variable = NUTS_ID,
-#                 time.variable = time,
-#                 treatment.identifier = "HR043",
-#                 )
-# nuts_try
-```
+<!-- synth.out <- synth(dataprep.out) -->
+
+<!-- data_synth <- main_dta %>% as.data.frame() %>% -->
+<!--   # Controls are 50km away from cities that have applied a LEZ o similar mesure, probably have to bi limited to one treated only  -->
+<!--   filter(treated_uz | contr_restr_50km) %>%  -->
+<!--   # Not necessary, If I use a variable that has only NUTS 2 regions -->
+<!--   filter(nuts_level == 2)  %>%  -->
+<!--   # only keep one treated and all controls -->
+<!--   filter(contr_restr_50km | geo == "DE30") -->
+<!-- dataprep(foo = nuts_try, -->
+<!--                 predictors = values, # This is wrong -->
+<!--                 dependent = values, -->
+<!--                 unit.variable = NUTS_ID, -->
+<!--                 time.variable = time, -->
+<!--                 treatment.identifier = "HR043", -->
+<!--                 ) -->
+<!-- nuts_try -->
+<!-- ``` -->
+
+More info:
+
+http://www.mit.edu/~jhainm/fqa.htm
 
 http://yiqingxu.org/teaching/17802/synth.pdf
+
 https://www.stata.com/meeting/uk17/slides/uk17_Cerulli.pdf
+
 https://blogs.worldbank.org/impactevaluations/evaluating-regulatory-reforms-using-the-synthetic-control-method
 https://jech.bmj.com/content/72/8/673
 
+Possibly then complement by 
+### **Fast and reliable computation of generalized synthetic controls (MSCMT package)**
+(look at Mendelay paper and to https://cran.r-project.org/web/packages/MSCMT/index.html)
 
-## Generalized Synthetic control method (experiment)
+## MASC
+
+> See "Implementation ECI borrador
+
+
+# Generalized Synthetic control method (experiment)
+
+  * Unrestricted weights (can be negative or positive)
+  * Calculation of ATE
+  * Calculation of Matrix completion methods.
 
 1. Try with NUTS 2 regions. 
   - Variable: Unemployment rate total, case: Berlin
 2. Try with NUTS 3 regions. 
   - Variable: Employed population rate, case: Aachen
+  
+
 
 ```{r}
 library(gsynth)
 library(lubridate)
 
-# Prepare data for NUTS 2 synthetic control -> Treatment var to dummy +  restrict controls
+# Transformate treatment var into a dummy variable
+# (Would be good to do this before.)
 
-# Would be good to do this before.
-temp %>%
-  # Transformate treatment var into a dummy variable
-  group_by(geo) %>%
-  mutate(
-    is_inagurated = as_date(Stage_1, format = "%d.%m.%Y") %>% year(),
-    is_announced = as_date(Announcment, format = "%d.%m.%Y") %>% year(),
-  ) %>%
-  ungroup() %>%
+main_dta <- main_dta %>%
+  # group_by(geo) %>%
+  # mutate(
+  #   year_inagurated = as_date(Stage_1, format = "%d.%m.%Y") %>% year(),
+  #   year_announced = as_date(Announcment, format = "%d.%m.%Y") %>% year(),
+  # ) %>%
+  # ungroup() %>%
   mutate(
     is_inagurated = case_when(
-      is.na(is_inagurated) ~ 0, # If its control, never inagurated
-      time < is_inagurated ~ 0, # If its before the inaguration
+      is.na(year_stage1) ~ 0, # If its control, never inagurated
+      time < year_stage1 ~ 0, # If its before the inaguration
+      TRUE ~ 1 # if neither, then its after
+    ),
+    # create a placebo treatment
+    is_inagurated_3y = case_when(
+      is.na(year_stage1) ~ 0, # If its control, never inagurated
+      time < year_stage1 - 3 ~ 0, # If its more than 3 years beforethe inaguration
       TRUE ~ 1 # if neither, then its after
     ),
     is_announced = case_when(
-      is.na(is_announced) ~ 0, # If its control, never
-      time < is_announced ~ 0, # If its before
-      TRUE ~ 1 # if neither, then its after
+      is.na(year_stage1) ~ as.integer(0), # If its control, never
+      is.na(year_announced) ~ NA_integer_, # If i dont have date of announcment, forget observaton
+      time < year_announced ~ as.integer(0), # If its before
+      TRUE ~ as.integer(1) # if neither, then its after
     )
-  ) %>%
+  )
+
+main_dta %>%
   select(geo, time, LEZ,
          Stage_1, is_inagurated,
          Announcment, is_announced,
          )  %>%
   filter(!is.na(Stage_1))
 
+# Prepare data for NUTS 2 synthetic control -> restrict controls
+n2_dta <- main_dta %>%
+  filter(treated_uz | contr_restr_50km) %>% # Controls are 50km away from cities that have applied a LEZ o similar mesure, probably have to bi limited to one treated only 
+  filter(nuts_level == 2) # Not necessary, If I use a variable that has only NUTS 2 regions
+
+# panelView(Y ~ D, data = main_dta,  index = c("id","time"), pre.post = TRUE) 
 ```
+
+### Try Gsynth N2
+
+```{r}
+out_n2 <- gsynth(unempR_T ~ is_inagurated +
+                   active_F_share, # + gdp_eur_hab, 
+               data = n2_dta, 
+               index = c("geo","time"), 
+               na.rm = TRUE, # remove 
+               force = "two-way", # unit or time fixed effects or both?
+               # CV = TRUE, 
+               # r = c(0, 4), # an integer specifying the number of factors. If CV = TRUE, the cross validation procedure will select the optimal number of factors from r to 5.
+               se = TRUE, 
+               # EM = TRUE, # Gobillon and Magnac (takes a lot of time)
+               # inference = "parametric", 
+               nboots = 100,  #500
+               parallel = TRUE, cores = 5, # if do parallel and how many cores
+               min.T0 = 7) # Has to be larger than r.max+1
+
+out_n2 %>% print()
+plot(out_n2)#, ylim = c(-5000, 2000))
+
+# plot all data:
+plot(out_n2, type = "counterfactual", 
+     raw = "all", main="") # Why the final dip?
+
+plot(out_n2, type = "counterfactual", 
+     raw = "none", main="") # Why the final dip?
+
+plot(out_n2, type = "counterfactual", id = "DE30") # Berlin
+plot(out_n2, type = "counterfactual", id = "DE13") # Freiburg
+plot(out_n2, type = "counterfactual", id = "DE50") # Bremen 
+
+# plot(out_n2, type = "raw", theme.bw = TRUE)
+
+# We can also add two 5 to 95% quantile bands of the treated and control outcomes as references to make sure the estimated counterfactuals are not results of severe extrapolations.
+
+# NOTE: THIS IS STRAGE, WHY ONLY BERLIN? I think because its the only treated
+plot(out_n2, type = "counterfactual", 
+     raw = "band", xlab = "Time", 
+     # ylim = c(-5,35),
+     theme.bw = TRUE)
+
+plot(out_n2, type = "loadings")
+```
+
+Things left to do:
+ * Know the donnor pool of each treated
+ * know the average characteristics of each treated and its synthetic control + the variance (max and min of those characteristics from the donor pool)
+ * Unemployment counterfactual for ATE goes bellow 0%,
+
+
+### Try Gsynth N3
+
+```{r}
+# Prepare data for NUTS 2 synthetic control -> restrict controls
+n3_dta <- main_dta %>%
+  filter(treated_uz | contr_restr_50km) %>% # Controls are 50km away from cities that have applied a LEZ o similar mesure, probably have to bi limited to one treated only 
+  filter(nuts_level == 3)
+
+# REVIEW DATA
+n3_dta %>%
+  select(geo, time, LEZ,
+         Stage_1, is_inagurated,
+         Announcment, is_announced,
+         )  %>%
+  filter(!is.na(Stage_1))
+
+out_n3 <- gsynth(empl_rate_wpop ~ is_inagurated, 
+               data = n3_dta, 
+               index = c("geo","time"), 
+               na.rm = TRUE, # remove 
+               force = "two-way", # unit or time fixed effects or both?
+               # CV = TRUE, 
+               # r = c(0, 4), # an integer specifying the number of factors. If CV = TRUE, the cross validation procedure will select the optimal number of factors from r to 5.
+               se = TRUE, 
+               # EM = TRUE, # Gobillon and Magnac (takes a lot of time)
+               # inference = "parametric", 
+               nboots = 100,  #500
+               parallel = TRUE, cores = 5, # if do parallel and how many cores
+               min.T0 = 7) # Has to be larger than r.max+1
+
+n3_dta$is_inagurated %>% table()
+
+out_n3 %>% print()
+plot(out_n3)#, ylim = c(-5000, 2000))
+
+# plot all data:
+plot(out_n3, type = "counterfactual", 
+     raw = "all", main="") # Why the final dip?
+
+plot(out_n3, type = "counterfactual", 
+     raw = "none", main="") # Why the final dip?
+
+plot(out_n3, type = "counterfactual", id = "DE300") # Berlin
+
+# plot(out_n2, type = "raw", theme.bw = TRUE)
+
+# We can also add two 5 to 95% quantile bands of the treated and control outcomes as references to make sure the estimated counterfactuals are not results of severe extrapolations.
+
+# NOTE: THIS IS STRAGE, WHY ONLY BERLIN? I think because its the only treated
+plot(out_n3, type = "counterfactual", 
+     raw = "band", xlab = "Time", 
+     # ylim = c(-5,35),
+     theme.bw = TRUE)
+
+plot(out_n3, type = "loadings")
+
+dim(out_n3$wgt.implied)
+## [1] 38  9
+sort(out_n3$wgt.implied[,8])
+```
+
+Notes on results:
+
+  * A lot of removed treated units
+  * Factor loadings do not coincide, maybe some restriction of controls would be good.
 
 
 ```{r}
@@ -374,7 +565,7 @@ out2 <- gsynth(gdp_eur_hab ~ treat_gz + gva_A + gva_B_E +
 
 
 ```{r}
-out2 %>% print()
+out_n2 %>% print()
 out2$est.att
 out2$est.avg
 out2$est.beta
@@ -407,20 +598,20 @@ _Questions:_
 ```{r}
 # out2$est.co$residuals %>% as.data.frame()
 # plot(out2, ylim = c(-0.4, 0.02))
-plot(out2, ylim = c(-5000, 2000))
+plot(out_n2)#, ylim = c(-5000, 2000))
 
-plot(out2, type = "counterfactual", 
+plot(out_n2, type = "counterfactual", 
      raw = "all", main="") # Why the final dip?
 
 plot(out2, type = "counterfactual", 
      raw = "none", main="") # Why the final dip?
 
-plot(out2, type = "counterfactual", id = "UKF14") # Nottingham
-plot(out2, type = "counterfactual", id = "FR101") # Paris
-plot(out2, type = "counterfactual", id = "HU110") # Budapest
+plot(out_n2, type = "counterfactual", id = "DE30") # Berlin
+# plot(out2, type = "counterfactual", id = "FR101") # Paris
+# plot(out2, type = "counterfactual", id = "HU110") # Budapest
 plot(out2, type = "counterfactual", id = "DE111") # Stuttgart
 plot(out2, type = "counterfactual", id = "DE212") #	München
-plot(out2, type = "counterfactual", id = "UKI32") #	Westminster (LDN)
+# plot(out2, type = "counterfactual", id = "UKI32") #	Westminster (LDN)
 # LONDON BOROUGHS! UKI31 - UKI45
 # UKI31	Camden and City of London	
 # UKI32	Westminster
@@ -487,17 +678,3 @@ https://andrewcbaker.netlify.com/2020/01/01/what-can-we-say-about-medical-mariju
 
 ## How much pollution comes from cars? (and other info from the EC):
 https://ec.europa.eu/environment/air/cleaner_air/
-
-n the notebook, the results appear beneath the code. 
-
-Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
-
-```{r}
-plot(cars)
-```
-
-Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
-
-When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
-
-The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.

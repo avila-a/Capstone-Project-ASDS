@@ -28,7 +28,7 @@ library(limSolve)
 * outcome
 
 ```{r}
-load("C:/Users/Alessandra/Documents/Dottorato/Visiting/data2.RData")
+# load("C:/Users/Alessandra/Documents/Dottorato/Visiting/data2.RData")
 ```
 
 Especify the variables, periods and the delay of the mediator:
@@ -38,11 +38,11 @@ Especify the variables, periods and the delay of the mediator:
 name_treat<-"FRA"
 
 #Column with ID
-col_id<-1
+col_id <- 1
 #Column with numeric ID
-col_id_num<-7
+col_id_num <- 7
 #Column with time 
-col_time<-2
+col_time <- 2
 
 #Mediator column
 M<-6

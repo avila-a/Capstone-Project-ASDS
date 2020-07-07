@@ -1,12 +1,13 @@
----
+ ---
 title: "Replication code"
 author: 'abadie et al'
 date: ""
 output: 
-  html_notebook:
-    code_folding: show
-    # keep_md: true
-    df_print: paged
+  # html_notebook:
+  #   code_folding: show
+  #   # keep_md: true
+  #   df_print: paged
+  html_document
 ---
 
 ## Replication Code for
@@ -23,7 +24,7 @@ library(xtable)
 
 Load Data 
 ```{r}
-setwd("~/A - Estudios/LSE_ASDS/Project/PM2.5/Related research/Abadie et al (2015) replication files")
+setwd("~/A - Estudios/LSE_ASDS/Project/Capstone-Project/Related research/Abadie et al (2015) replication files")
 
 d <- read.dta("repgermany.dta")
 ```
@@ -59,7 +60,9 @@ dataprep.out <-
 synth.out <- 
   synth(
         data.prep.obj=dataprep.out,
-        Margin.ipop=.005,Sigf.ipop=7,Bound.ipop=6
+        Margin.ipop=.005, 
+        Sigf.ipop=7, 
+        Bound.ipop=6
         )
 ```
 
@@ -193,7 +196,7 @@ Extra figure done by me:
 Text.height <- 23000
 Cex.set <- .8
 # pdf(file = "ger_vs_oecd_vsSynth.pdf", width = 5.5, height = 5.5, 
-    family = "Times",pointsize = 12)
+    # family = "Times", pointsize = 12)
 {
   plot(1960:2003,dataprep.out$Y1plot,
        type="l",ylim=c(0,33000),col="black",lty="solid",
@@ -296,7 +299,7 @@ dataprep.out <-
 # fit main model
 synth.out <- synth(
   data.prep.obj=dataprep.out,
-  custom.v=as.numeric(synth.out$solution.v)
+  custom.v = as.numeric(synth.out$solution.v)
 )
 ```
 
@@ -524,12 +527,13 @@ legend(x="bottomright",
 
 ```{r}
 ### Table 3: Synthetic Weights from Combinations of Control Countries
-rm(list=ls())
+# rm(list=ls())
 library(gtools)
 library(kernlab)
+# 
+# # data prep for training model
+# d <- read.dta("repgermany.dta")
 
-# data prep for training model
-d <- read.dta("repgermany.dta")
 dataprep.out <-
   dataprep(
     foo = d,

@@ -132,13 +132,12 @@ GET DATA
 
 CLEAN DATA, SUMMARY STATISTICS
 
-- [ ] Get all data in one same spatial definition
+- [x] Get all data in one same spatial definition
 - [ ] Summarize data
 - [ ] Information for selection of control regions
   - [x] NUTS 3 in the same NUTS 2 region
   - [ ] Are they going to change in time? (dynamic set of controls?) NO
   - [x] Discard Rhrine-Ruhr area as a control
-  - [x] 
 - [ ] Create a **list of possible controls** for each treated city
   - [ ] Bound overall differences in levels of predictive variables pre-intervention (maximum and minimum)
     - [ ] Restrict big relative or absolute differences in controls?

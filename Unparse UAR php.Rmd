@@ -390,7 +390,9 @@ policy_map <- leaflet() %>%
     popup = paste0("<b>", uar_sf$cityname, "</b> <br/>",
                    "<b> Scheme: </b>", uar_sf$scheme, "<br/>",
                    "<b> Source: </b> U.A.R")
-    )
+    ) %>% 
+  setView(15, 50, zoom = 3)
+
 
 # policy_map
 
@@ -438,7 +440,7 @@ umweltzonen %>% names()
 
 ```{r}
 # saveRDS(umweltzonen, "data/umweltbundesamt/umweltonen.rds")
-# readRDS("data/umweltbundesamt/umweltonen.rds")
+# umweltzonen <- readRDS("data/umweltbundesamt/umweltonen.rds")
 ```
 
 ### Create multiple sets of controls: 
@@ -602,7 +604,7 @@ nuts.sf <- nuts.sf %>%
   mutate(
     treated_any = treated_osm | treated_uar | treated_gz | treated_uz
   )
-# + include locations of cities in umweltbundesamt
+
 
 # Treatment statuses mostly coincide
 nuts.sf %>% as.data.frame() %>%
@@ -798,51 +800,6 @@ nuts.sf <- nuts.sf %>%
 
 ```
 
-```{r}
-treated_and_controls <- leaflet() %>% 
-  addTiles() %>%
-  addPolygons(data = nuts.sf %>%
-                filter(treated_any == TRUE), 
-              weight = 4, col = "red") %>%
-  addPolygons(data = lez_shapes, col = "green") %>%
-  addPolygons(data = nuts.sf %>%
-                filter(contr_restr_50km == TRUE,
-                       # urb_index < 2.7
-                       ), # Not very rural
-              col = "blue") %>%
-  addMarkers(data = umweltzonen,
-             popup = paste0(
-               "<b>", umweltzonen$LEZ, "</b> <br/>",
-               "<b> Start date: </b>", umweltzonen$Stage_1, "<br/>",
-               "<b> Source: </b> Umweltzonen"))
-
-# treated_and_controls
-
-htmlwidgets::saveWidget(treated_and_controls,
-                        file="map_tr_and_controls_.html")
-
-treated_and_controls_2 <- leaflet() %>% 
-  addTiles() %>%
-  addPolygons(data = nuts.sf %>%
-                filter(treated_any == TRUE,
-                       LEVL_CODE == 2), 
-              weight = 4, col = "red") %>%
-  addPolygons(data = lez_shapes, col = "green") %>%
-  addPolygons(data = nuts.sf %>%
-                filter(contr_restr_50km == TRUE,
-                       LEVL_CODE == 2,
-                       # urb_index < 2.7
-                       ), 
-              col = "blue") %>%
-  addMarkers(data = umweltzonen,
-             popup = paste0(
-               "<b>", umweltzonen$LEZ, "</b> <br/>",
-               "<b> Start date: </b>", umweltzonen$Stage_1, "<br/>",
-               "<b> Source: </b> Umweltzonen"))
-
-treated_and_controls_2
-```
-
 Include all relevant data in nuts.sf and save it.
 
 
@@ -860,6 +817,7 @@ Include all relevant data in nuts.sf and save it.
 nuts.sf %>% head(20)
 ```
 
+
 ## Date of treatment and treatment status
 
 ```{r}
@@ -868,24 +826,45 @@ nuts.sf.treated <- nuts.sf %>%
 
 # If there are multiple zones in a given NUTS region I get multiple observations of that region 
 
-nuts.sf.treated <- nuts.sf_treated %>%
+nuts.sf.treated <- nuts.sf.treated %>%
   mutate(more_one_nuts = duplicated(NUTS_ID)) %>%
+  # Avoid to delete Aachen (it has 2 zones implemented the same year so there is no need to eliminate it)
+  filter(!(NUTS_ID == "DEA2D" & more_one_nuts == TRUE)) %>%
+  # Avoid to delete Freiburg (it has 2 zones, freiburg is signifficantly bigger and it's applied before so it had not influence from the other one, the other one is deleted)
+  filter(!(NUTS_ID == "DE13" & more_one_nuts == TRUE)) %>%
   dplyr::group_by(NUTS_ID) %>%
   dplyr::mutate(more_one_nuts = sum(more_one_nuts)) %>%
   ungroup()
 
-# List og NUTS regions that have only one LEZ: 
+# List of NUTS regions that have only one LEZ: 
 nuts.sf.treated %>%
   filter(!is.na(LEZ),
-         more_one_nuts == 0)
+         more_one_nuts == 0) %>%
+  # select(NUTS_ID, NUTS_NAME) %>%
+  unique()
 
-nuts.sf.treated <- temp %>%
+nuts.sf.treated <- nuts.sf.treated %>%
   filter(more_one_nuts == 0) %>%
   select(-more_one_nuts)
+
+nuts.sf.treated <- nuts.sf.treated %>%
+  group_by(NUTS_ID) %>%
+  mutate(
+    year_stage1 = as_date(Stage_1, format = "%d.%m.%Y") %>% year(),
+    year_stage2 = as_date(Stage_2, format = "%d.%m.%Y") %>% year(),
+    year_stage3 = as_date(Stage_3, format = "%d.%m.%Y") %>% year(),
+    year_announced = as_date(Announcment, format = "%d.%m.%Y") %>% year(),
+  ) %>%
+  ungroup()
 
 nuts.sf.treated %>% head()
 ```
 
+```{r}
+nuts.sf.treated %>%
+  # filter(str_detect(NUTS_NAME, "Freiburg")) %>%
+  filter(NUTS_ID == "UKF3")
+```
 
 
 ## Save the data
@@ -896,4 +875,84 @@ nuts.sf.treated %>% head()
 # saveRDS(nuts.sf.treated, "data/nuts_sf_treated")
 # nuts.sf.treated <- readRDS("data/nuts_sf_treated")
 ```
+
+```{r}
+temp_treated <- nuts.sf.treated %>%
+  filter(treated_any == TRUE,
+         LEVL_CODE == 3)
+
+temp_control <- nuts.sf.treated %>%
+  filter(contr_restr_50km == TRUE,
+         LEVL_CODE == 3)
+
+treated_and_controls <- leaflet() %>% 
+  addTiles() %>%
+  addPolygons(data = temp_treated,
+              popup = paste0(
+                "<b>", temp_treated$NUTS_ID, "</b> <br/>",
+                "<b> Nuts name: </b>", 
+                temp_treated$NUTS_NAME, "<br/>"),
+              weight = 4, col = "red") %>%
+  addPolygons(data = lez_shapes, col = "green") %>%
+  addPolygons(data = temp_control,
+              col = "blue",
+              popup = paste0(
+                "<b>", temp_control$NUTS_ID, "</b> <br/>",
+                "<b> Name: </b>", 
+                temp_control$NUTS_NAME, "<br/>")) %>%
+  addMarkers(data = umweltzonen,
+             popup = paste0(
+               "<b>", umweltzonen$LEZ, "</b> <br/>",
+               "<b> Start date: </b>", umweltzonen$Stage_1, "<br/>",
+               "<b> Source: </b> Umweltzonen")) %>% 
+  setView(15, 50, zoom = 3)
+
+# treated_and_controls
+
+# htmlwidgets::saveWidget(treated_and_controls,
+#                         file="map_tr_and_controls_.html")
+```
+
+For NUTS 2
+
+```{r}
+temp_treated <- nuts.sf.treated %>%
+  filter(treated_any == TRUE,
+         LEVL_CODE == 2)
+
+temp_control <- nuts.sf.treated %>%
+  filter(contr_restr_50km == TRUE,
+         LEVL_CODE == 2)
+
+treated_and_controls_2 <- leaflet() %>% 
+  addTiles() %>%
+  addPolygons(data = temp_treated,
+              popup = paste0(
+                "<b>", temp_treated$NUTS_ID, "</b> <br/>",
+                "<b> Start date: </b>", 
+                temp_treated$NUTS_NAME, "<br/>"),
+              weight = 4, col = "red") %>%
+  addPolygons(data = lez_shapes, col = "green") %>%
+  addPolygons(data = temp_control, 
+              col = "blue",
+              popup = paste0(
+                "<b>", temp_control$NUTS_ID, "</b> <br/>",
+                "<b> Name: </b>", 
+                temp_control$NUTS_NAME, "<br/>")
+              ) %>%
+  addMarkers(data = umweltzonen,
+             popup = paste0(
+               "<b>", umweltzonen$LEZ, "</b> <br/>",
+               "<b> Start date: </b>", umweltzonen$Stage_1, "<br/>",
+               "<b> Source: </b> Umweltzonen")) %>% 
+  setView(15, 50, zoom = 3)
+
+# treated_and_controls_2 
+
+# htmlwidgets::saveWidget(treated_and_controls_2,
+#                         file="map_tr_and_controls_n2.html")
+```
+
+
+end
 
