@@ -48,7 +48,8 @@ data <- main_dta %>% as.data.frame() %>%
   data %>%
     select(geo, time, 
            unempR_T, mean_pol, # outcome and mediator
-           urb_index, active_F_share, gdp_eur_hab, wages_per_worker # controls
+           urb_index, active_F_share, #gdp_eur_hab, 
+           wages_per_worker # controls
            )), ]
 
 incomplete <- which((data$geo %>% table(useNA = "no")) < length(unique(data$time)))
@@ -68,7 +69,10 @@ data <- data %>%
 
 # Create a list of controls
 controls <- data %>%
-  filter(contr_restr_60km == TRUE) %>%
+  filter(
+    # contr_restr_60km == TRUE,
+    contr_restr_point == TRUE,
+    ) %>%
   # filter(geo != "LU00") %>% # REMOVE LUXEMBOURG (ROBUSTNESS TEST)
   select(geo) %>% unique()
 controls <- controls$geo
@@ -91,9 +95,9 @@ Especify the variables, periods and the delay of the mediator:
 # DE50 -> Bremen, No clear effect (DE + DE)
 # DE21 Bayern (clear ¿significant? effects, oposite than intuition)
 # DED5 -> Liepzig (!! not in dataset for missing values)
-# DE13 -> Freiburg, tourist city
+# DE13 -> Freiburg, tourist city. (small) INCLREASE? in pollution, reduction in unemployment
 
-name_treat <- "DE13" # name_treat<-"FRA"
+name_treat <- "DE30" # name_treat<-"FRA"
 
 # Column with ID
 col_id <- str_detect(names(data), "geo") %>% which()
@@ -113,7 +117,9 @@ T_in <- 2001 # First year of polution data
 # Note: Should this be "2000" ¿?
 
 # Ending pre-treatment period ->looks for treated unit and takes the year
-T_fi <- data[data$geo == name_treat, "year_stage1"][1]
+
+# T_fi <- data[data$geo == name_treat, "year_stage1"][1]
+T_fi <- data[data$geo == name_treat, "year_announced"][1]
 
 # T_fi <- 
 
@@ -152,9 +158,12 @@ pretreat4 <- list(list(Y, T_in, "mean"))
 for (t in c((T_in+1):T_fi)){
    pretreat4[[length(pretreat4)+1]]<-list(Y, t, "mean")
 }
-for (t in (T_in-delay):(T_fi-delay)){
-   pretreat4[[length(pretreat4)+1]]<-list(M, t, "mean")
- }
+# for (t in (T_in-delay):(T_fi-delay)){
+#    pretreat4[[length(pretreat4)+1]]<-list(M, t, "mean")
+# }
+
+pretreat4[[length(pretreat4)+1]]<-list(M, c(2001, 2006), "mean")
+
 #If other constraints are needed complete and run the following line 
 #(copying and pasting it as much as needed)
 #pretreat4[[length(pretreat4)+1]]<-list(column number of the variable, years of interest, "function that has to be applied to the values of that variable in those years")
@@ -175,7 +184,7 @@ include_add_controls <- function(data, controls, time){
 
 pretreat4 <- include_add_controls(
   data = data, 
-  controls = c("urb_index", "gdp_eur_hab", 
+  controls = c("urb_index", #"gdp_eur_hab", 
                "wages_per_worker", "active_F_share"),
   time = T_fi
 )
@@ -210,7 +219,6 @@ T_inf <- T_in-length(T_in:T_fi)-delay
 
 ```
 
-NOTE: I commented the code of "automatic" fake treatment outcomes, said that I would do it manually but did not.
 
 ```{r}
 # data %>% is.na() %>%colSums()
@@ -271,8 +279,10 @@ path.plot(dataprep.res = prepar,
 synth.tables <- synth.tab(
                           dataprep.res = prepar,
                           synth.res = sintetico4
-                          ); synth.tables
-
+                          )
+synth.tables[1:2]
+synth.tables[3] %>% as.data.frame() %>%
+  arrange(desc(tab.w.w.weights))
 
 #Store the results on total effect and pre and post treatment RMSPE (automatic)
 potenz1<-M1

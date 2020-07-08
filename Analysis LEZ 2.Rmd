@@ -437,6 +437,9 @@ main_dta %>%
 
 # Prepare data for NUTS 2 synthetic control -> restrict controls
 n2_dta <- main_dta %>%
+  # FILTER SPAIN AND GREECE! (for those applied close to the finantial crisis)
+  filter(!(country %in% c("ES", "EL", "PT"))) %>%
+  
   filter(treated_uz | contr_restr_60km) %>% # Controls are 50km away from cities that have applied a LEZ o similar mesure, probably have to bi limited to one treated only 
   filter(nuts_level == 2) # Not necessary, If I use a variable that has only NUTS 2 regions
 
