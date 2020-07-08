@@ -1,0 +1,518 @@
+---
+title: "Implementation ECI"
+author: 'Alessandra Pasquini and Antonio Avila'
+date: ""
+output: 
+  html_notebook:
+  code_folding: show
+# keep_md: true
+df_print: paged
+---
+  
+The following code returns the total (`tot1`), direct (`dir1`) and indirect (`ind1`) effects implementing MASC method. The lines of the code which does not require user's interaction are labeled as "(automatic)" in the commented lines immediately above.
+
+```{r init, message=FALSE}
+rm(list = ls())
+
+library(Synth)
+library(limSolve)
+library(dplyr)
+library(stringr)
+```
+
+
+Get data:
+
+```{r}
+main_dta <- readRDS("data/main_dta.rds")
+
+data <- main_dta %>% as.data.frame() %>%
+  # If I use a variable that has only NUTS 2 regions
+  filter(nuts_level == 2)  %>% 
+  # Optional? restrict years ro 2001-2016, the period of mediator
+  filter(time >= 2001 & time <= 2016)
+```
+
+Restrict dataset so it becomes ballanced:
+
+```{r}
+# code from https://stackoverflow.com/a/25672453/12422706
+balanced <- function(data, ID, TIME, VARS, required=c("all","shared")) {
+    if(is.character(ID)) {
+        ID <- match(ID, names(data))
+    }
+    if(is.character(TIME)) {
+        TIME <- match(TIME, names(data))
+    }
+    if(missing(VARS)) { 
+        VARS <- setdiff(1:ncol(data), c(ID,TIME))
+    } else if (is.character(VARS)) {
+        VARS <- match(VARS, names(data))
+    }
+    required <- match.arg(required)
+    idf <- do.call(interaction, c(data[, ID, drop=FALSE], drop=TRUE))
+    timef <- do.call(interaction, c(data[, TIME, drop=FALSE], drop=TRUE))
+    complete <- complete.cases(data[, VARS])
+    tbl <- table(idf[complete], timef[complete])
+    if (required=="all") {
+        keep <- which(rowSums(tbl==1)==ncol(tbl))
+        idx <- as.numeric(idf) %in% keep
+    } else if (required=="shared") {
+        keep <- which(colSums(tbl==1)==nrow(tbl))
+        idx <- as.numeric(timef) %in% keep
+    }
+    data[idx, ]
+}
+```
+
+
+```{r}
+control_vars_labor <- c("urb_index", 
+                        "active_F_share", 
+                        "gdp_eur_hab",
+                        "wages_per_worker" # controls
+                        # "empl_prop_F",
+                        # "empl_prop_K_N"
+                        # "empl_prop_A", , "empl_prop_B_E", "empl_prop_O_U",
+                        # "empl_prop_G_J", 
+)
+# temp <- balanced(data = data, TIME = "time", ID = "geo", 
+#                  VARS = control_vars_labor)
+# temp %>% is.na() %>% colSums()
+
+# data %>%
+#   filter(geo == name_treat) %>%
+#   select(control_vars_labor, outcome, mediator)
+```
+
+
+
+
+
+```{r}
+init_sc <- function(data = data, name_treat, outcome, mediator, 
+                    id_col, col_time, delay = 0,
+                    t_in, 
+                    announced_or_implemented = c("A", "I"),
+                    tfi2,
+                    control_vars){
+  
+  # restrict the sample to a balanced panel
+  data_temp <- balanced(data = data, TIME = "time", ID = "geo", 
+                 VARS = c(control_vars_labor, 
+                          # id_col, col_time, 
+                          outcome, mediator))
+  
+  # Create a numerical id for each geo
+  data_temp <- data_temp %>%
+  mutate(num_id = as.numeric(as.factor(geo))) %>%
+  arrange(num_id)
+  
+  # Assign global variables:
+  assign("name_treat", name_treat,
+         envir = .GlobalEnv)
+  assign("M", (str_detect(names(data_temp), mediator) %>% which())[1], 
+         envir = .GlobalEnv)
+  assign("Y", str_detect(names(data_temp), outcome) %>% which(), 
+         envir = .GlobalEnv)
+  assign("col_id", str_detect(names(data_temp), id_col) %>% which(), 
+         envir = .GlobalEnv)
+  
+  assign("col_id_num", (names(data_temp) == "num_id") %>% which(), 
+         envir = .GlobalEnv)
+  
+  assign("col_time", str_detect(names(data_temp), col_time) %>% which(), 
+         envir = .GlobalEnv)
+  assign("T_in", t_in , envir = .GlobalEnv)
+  if (announced_or_implemented[1] == "A"){
+    assign("T_fi", data_temp[data_temp$geo == name_treat, "year_announced"][1], 
+           envir = .GlobalEnv)
+  } else {
+    assign("T_fi", data_temp[data_temp$geo == name_treat, "year_stage1"][1], 
+           envir = .GlobalEnv)
+  }
+  assign("T_fi2", tfi2 , envir = .GlobalEnv)
+  assign("control_vars", control_vars , envir = .GlobalEnv)
+  assign("delay", delay , envir = .GlobalEnv)
+  
+  # Create a list of controls
+  controls <- data_temp %>%
+    filter(
+      # contr_restr_60km == TRUE, # This can be OTHER variableS
+      contr_restr_point == TRUE,
+    ) %>%
+    # filter(geo != "LU00") %>% # REMOVE LUXEMBOURG (ROBUSTNESS TEST)
+    select(geo) %>% unique()
+  controls <- controls$geo
+  
+  # Restrict data to treated and set of controls
+  data_temp <- data_temp[which(is.element(data_temp[,col_id], controls) |
+                       data_temp[,col_id]==name_treat),]
+  
+  # Create a column with treatment status (automatic)
+  data_temp <- cbind(data_temp, rep(0, nrow(data_temp)))
+  data_temp[data_temp[,col_id]==name_treat, ncol(data_temp)]<-1
+  
+  #Identifies donor pool in the numeric id column (automatic)
+  controls <- data_temp[!(data_temp[,col_id]==name_treat) &
+                          data_temp[,col_time]==T_in, col_id_num]
+  
+  assign("data", data_temp , envir = .GlobalEnv)      # !!!
+  assign("controls", controls , envir = .GlobalEnv)      # !!!
+  
+  #Create all the required constraints (automatic) the constraints on all pre-treatment outcome until one year before intervention and pre-treatment mediator until two years before intervention)
+  
+  ## Note Antonio: This depends on the delay.
+  
+  pretreat4 <- list(list(Y, T_in, "mean"))
+  for (t in c((T_in+1):T_fi)){
+    pretreat4[[length(pretreat4)+1]]<-list(Y, t, "mean")
+  }
+  # for (t in (T_in-delay):(T_fi-delay)){
+  #    pretreat4[[length(pretreat4)+1]]<-list(M, t, "mean")
+  # }
+  
+  pretreat4[[length(pretreat4)+1]]<-list(M, c(2001, 2006), "mean")
+  
+  #If other constraints are needed complete and run the following line 
+  #(copying and pasting it as much as needed)
+  #pretreat4[[length(pretreat4)+1]]<-list(column number of the variable, years of interest, "function that has to be applied to the values of that variable in those years")
+  #Example 1: pretreat4[[length(pretreat4)+1]]<-list(15, 1986:1990, "mean")
+  #Example 2:
+  # for (c in 24:37){
+  #   pretreat4[[length(pretreat4)+1]]<-list(c, 1991:1997, "mean")
+  # }
+  
+  # Antonio: add urb_index, active_F_share, gdp_eur_hab as controls
+  include_add_controls <- function(data, controls, time){
+    id_controls <- which(names(data) %in% controls)
+    for (c in id_controls){
+      pretreat4[[length(pretreat4)+1]] <- list(c, time, "mean")
+    }
+    return(pretreat4)
+  }
+  
+  pretreat4 <- include_add_controls(
+    data = data, 
+    controls = c("urb_index", #"gdp_eur_hab", 
+                 "wages_per_worker", "active_F_share"),
+    time = T_fi
+  )
+  
+  assign("pretreat4", pretreat4 , envir = .GlobalEnv)      # !!!
+}
+
+# Control Vars unemployment / temporality
+control_vars_labor <- c("urb_index", 
+                        "active_F_share", 
+                        "gdp_eur_hab",
+                        "wages_per_worker" # controls
+                        # "empl_prop_F",
+                        # "empl_prop_K_N"
+                        # "empl_prop_A", , "empl_prop_B_E", "empl_prop_O_U",
+                        # "empl_prop_G_J", 
+)
+
+init_sc(data = data,
+        name_treat = "DE30",
+        outcome = "unempR_T",
+        mediator = "mean_pol",
+        id_col = "geo",
+        # id_col_num = "num_id",
+        col_time = "time",
+        t_in = 2001, # First year of polution data,
+        announced_or_implemented = "A",
+        tfi2 = 2016,
+        control_vars = control_vars_labor)
+```
+
+Delete all geos that have missing values on the variables of interest:
+
+
+## Calculation of total, direct and Indirect effects.
+
+#### Load the database: 
+
+* the name has to be "data"
+* it has to have a column of id, 
+* numeric id, 
+* time
+* mediator and
+* outcome
+
+```{r}
+# look at missign values
+data %>% is.na() %>% colSums()
+
+# Look at a list of treated
+data %>%
+  filter(treated_uz == TRUE) %>%
+  select(nuts_name, num_id, geo) %>% unique()
+
+# Could restrict time to 2001-2016
+```
+
+
+Especify the variables, periods and the delay of the mediator:
+
+```{r}
+# # Name of the treated unit in the column with ID "col_id"
+# 
+# # DE30 -> Berlin, No clear effect (DE+ CZ-ostrava)
+# # DE50 -> Bremen, No clear effect (DE + DE)
+# # DE21 Bayern (clear ¿significant? effects, oposite than intuition)
+# # DED5 -> Liepzig (!! not in dataset for missing values)
+# # DE13 -> Freiburg, tourist city. (small) INCLREASE? in pollution, reduction in unemployment
+```
+
+Name of the control units in the column with ID col_id (if the control units are all units in the database except the treated then do not run the two following lines)
+
+```{r}
+#Add fake pre-treatment outcomes to optimize on pre-treatment mediator values (automatic) during the choice of matrix V
+#If it is decided to select the weights V to use manually skip these lines of code
+
+# Note Antonio: This restricts data on the "study period"
+data <- data[which(data[,col_time]>=(T_in-delay) &
+                     data[,col_time]<=T_fi2),]
+
+data2 <- data[which(data[,col_time]>=(T_in-delay) &
+                    data[,col_time]<=(T_fi-delay)),]
+data2[,Y] <- data2[,M]
+data2 <- data2[order(data2[,col_id_num], data2[,col_time]),]
+
+data2[,col_time] <- rep((T_in-length(T_in:T_fi)-delay):(T_in-1-delay),
+                        length(controls)+1) # or controls+1
+data <- rbind(data2, data)
+data <- data[order(data[,col_id_num], decreasing=F),]
+remove(data2)
+
+#Fake starting time (automatic)
+#This starting time is required if the pre-treatment mediator values are added as fake outcomes (see above), otherwise run the commented line below
+T_inf <- T_in-length(T_in:T_fi)-delay
+
+
+# T_inf <- T_in
+
+```
+
+
+```{r}
+# data %>% is.na() %>%colSums()
+```
+
+
+### Total Effect
+
+```{r}
+#Looking for the synthetic unit for the estimation of total effect (automatic):
+prepar <- dataprep(data, 
+                 special.predictors = pretreat4, 
+                 dependent=Y,
+                 unit.variable = col_id_num, 
+                 controls.identifier = controls, 
+                 time.variable = col_time, 
+                 treatment.identifier =data[data[,col_id]==name_treat & data[,col_time]==T_in,col_id_num],
+                 unit.names.variable = "geo",
+          # Ant: was c(T_inf:(T_in-delay-1), T_in:T_fi) for BOTH
+                 time.predictors.prior = c(T_inf:(T_in-delay-1), T_in:T_fi), # c(T_in:T_fi),
+                 time.optimize.ssr = c(T_inf:(T_in-delay-1), T_in:T_fi), #c(T_in:T_fi),
+                 time.plot = T_inf:T_fi2)
+
+sintetico4 <- synth(data.prep.obj = prepar)
+
+#If the weights V are chosen manually run the commented line below rather than those above
+#sintetico4<-synth(data.prep.obj = prepar, custom.v=required weigths)
+
+#Select the values for the graph of the outcome (and the total effect value) (automatic)
+
+M1 <- data[which(data[,ncol(data)]==1 & data[,col_time]>=T_in &
+                   data[,col_time]<=T_fi2), Y]
+M_synth<-c()
+for (u in controls){
+  M_synth<-cbind(M_synth, 
+                 matrix(data[which(data[,col_id_num]==u & 
+                                     data[,col_time]>=T_in &
+                                     data[,col_time]<=T_fi2), Y], ncol=1))
+}
+
+{
+  #Plot the results (automatic)
+  plot(T_in:T_fi2, M1, type="l", 
+       ylim=c(min(c(M1, M_synth%*%sintetico4$solution.w))-sd(M1), 
+              max(c(M1, M_synth%*%sintetico4$solution.w))+sd(M1)),
+       xlab="Time", ylab="Outcome", main=colnames(data)[Y], 
+       sub="Observed Y(1,1) and Synthetic Y(0,0)")
+  
+  # ! removed ", add=TRUE" from lines (Antonio)
+  lines(T_in:T_fi2, M_synth%*%sintetico4$solution.w, col="red") 
+  abline(v=(T_fi+1), lty=3)
+}
+
+# Added by Antonio
+path.plot(dataprep.res = prepar, 
+          synth.res = sintetico4)
+
+synth.tables <- synth.tab(
+                          dataprep.res = prepar,
+                          synth.res = sintetico4
+                          )
+synth.tables[1:2]
+synth.tables[3] %>% as.data.frame() %>%
+  arrange(desc(tab.w.w.weights))
+
+#Store the results on total effect and pre and post treatment RMSPE (automatic)
+potenz1<-M1
+potenz2<-M_synth%*%sintetico4$solution.w
+tot1<-potenz1-potenz2
+PRE_RMSPE_tot1<-mean(tot1[1:(length(T_in:T_fi))]^2)
+POST_RMSPE_tot1<-tot1[(length(T_in:T_fi)+1):length(T_in:T_fi2)]
+
+#Select the values for the graph of the mediator when the total effect is calculated (automatic)
+M1<-data[which(data[,ncol(data)]==1 & data[,col_time]>=(T_in-delay) & data[,col_time]<=(T_fi2-delay)), M]
+M_synth<-c()
+for (u in controls){
+  M_synth<-cbind(M_synth, matrix(data[which(data[,col_id_num]==u & data[,col_time]>=(T_in-delay) & data[,col_time]<=(T_fi2-delay)), M], ncol=1))
+}
+
+{
+  #Plot the results (automatic)
+  plot(T_in:T_fi2, M1, type="l", 
+       ylim=c(min(c(M1, M_synth%*%sintetico4$solution.w))-sd(M1), 
+              max(c(M1, M_synth%*%sintetico4$solution.w))+sd(M1)),
+       xlab="Time", ylab="Mediator", main=colnames(data)[M], 
+       sub="Observed M(1) and Synthetic M(0)")
+  # !! Antonio: removed "add=TRUE"
+  lines(T_in:T_fi2, M_synth%*%sintetico4$solution.w, col="red")
+  abline(v=(T_fi+1), lty=3)
+}
+
+
+#Store the results on the effect on the mediator (automatic)
+M_tot1<-(M1-M_synth%*%sintetico4$solution.w)
+```
+
+### Direct Effect
+
+```{r}
+#Use the same pre-treatment constraints (automatic)
+pretreat6 <- pretreat4
+#Creates vectors to store the results (automatic)
+potenz1<-as.matrix(rep(NA, length(T_in:T_fi2)), 
+                   nrow=length(T_in:T_fi), ncol=1)
+rownames(potenz1)<-T_in:T_fi2
+
+potenz2<-as.matrix(rep(NA, length(T_in:T_fi2)), 
+                   nrow=length(T_in:T_fi), ncol=1)
+rownames(potenz2)<-T_in:T_fi2
+
+#Apply synth algorithm each post-treatment time period adding each time period an additional constraint on the mediator required for the time period of interest (i.e. given by the time period of interest minus the required delay) (automatic)
+j<-1
+for (i in (T_fi+1):T_fi2){
+  #The weigths to select with V can be chosen adding the post-treatment mediator value as a 
+  #fake outcome in the cross validation process if the following commented lines are run. If
+  #this choice is made the commented synth function below has to be run instead than the 
+  #non-commented ones 
+  # data2<-data[which(data[,col_time]==(i-delay)),]
+  # data2[,Y]<-data2[,M]
+  # data2<-data2[order(data2[,col_id_num],data2[,col_time]),]
+  # data2[,col_time]<-rep((T_in-length(T_in:T_fi)-delay-j), length(controls)+1)
+  # databis<-rbind(data2, databis)
+  # data<-data[order(data[,col_id_num],decreasing=F),]
+  # remove(data2)
+  # T_inf<-T_in-j
+  
+  #Add the post-treatment constraint on the mediator for the time period of interest (automatic)
+  pretreat6[[length(pretreat6)+1]]<-list(M, i-delay, "mean")
+  
+  #Looking for the synthetic unit for the estimation of direct effect (automatic):
+  prepar6<-dataprep(data, 
+                    special.predictors=pretreat6, 
+                    dependent=Y, 
+                    unit.variable=col_id_num, 
+                    controls.identifier = controls, 
+                    time.variable =col_time, 
+                    treatment.identifier =data[data[,col_id]==name_treat & data[,col_time]==T_in,col_id_num], 
+                    time.predictors.prior=c(T_inf:(T_in-delay-1), T_in:T_fi),
+                    time.optimize.ssr =c(T_inf:(T_in-delay-1), T_in:T_fi),
+                    time.plot=T_in:T_fi2)
+  
+sintetico6 <-synth(data.prep.obj = prepar6,
+                   custom.v = c((1/2)*as.numeric(sintetico4$solution.v),
+                                rep((1/(2*j)), j)))
+  
+  #Store the results in the vectors previously created (automatic)
+  potenz1temp<-prepar6$Y1plot
+  potenz2temp<-prepar6$Y0plot%*%sintetico6$solution.w
+  potenz1[rownames(potenz1)==i]<-potenz1temp[rownames(potenz1temp)==i]
+  potenz2[rownames(potenz2)==i]<-potenz2temp[rownames(potenz2temp)==i]
+  j<-j+1
+}
+
+synth.tables6 <- synth.tab(
+                          dataprep.res = prepar6,
+                          synth.res = sintetico6
+                          ); synth.tables
+
+
+
+#Store pre-treatment period values for the synthetic unit selected when the last post-treatment period was the period of interest (automatic)
+potenz1[rownames(potenz1)>=T_in & rownames(potenz1)<=T_fi]<-potenz1temp[rownames(potenz1temp)>=T_in & rownames(potenz1temp)<=T_fi]
+potenz2[rownames(potenz2)>=T_in & rownames(potenz2)<=T_fi]<-potenz2temp[rownames(potenz2temp)>=T_in & rownames(potenz2temp)<=T_fi]
+
+#Store the results on direct effect and corresponding pre and post treatment RMSPE (automatic)
+dir1<-potenz1-potenz2
+PRE_RMSPE_dir1<-mean(dir1[1:(length(T_in:T_fi))]^2)
+POST_RMSPE_dir1<-dir1[(length(T_in:T_fi)+1):length(T_in:T_fi2)]
+
+#Plot the results (automatic)
+{
+  plot(T_in:T_fi2, potenz1, type="l", 
+       ylim=c(min(c(potenz1, potenz2))-(sd(potenz1)), 
+              max(c(potenz1, potenz2))+sd(potenz1)), 
+       xlab="Time", ylab="Outcome", main=colnames(data)[Y], 
+       sub="Observed Y(1,1) and Synthetic Y(0,1)")
+  lines(T_in:T_fi2, potenz2, col="red") # removed "add=TRUE" (Antonio)
+  abline(v=(T_fi+1), lty=3)
+}
+
+
+#Select the values for the graph of the mediator when the direct effect is calculated (automatic)
+M1 <- data[which(data[,ncol(data)]==1 & data[,col_time]>=(T_in-delay) & data[,col_time]<=(T_fi2-delay)), M] 
+M_synth<-c()
+for (u in controls){
+  M_synth<-cbind(M_synth, matrix(data[which(data[,col_id_num]==u & data[,col_time]>=(T_in-delay) & data[,col_time]<=(T_fi2-delay)), M], ncol=1))
+}
+
+#Plot the results (automatic)
+plot(T_in:T_fi2, M1, type="l", 
+     ylim=c(min(c(M1, M_synth%*%sintetico6$solution.w))-sd(M1), 
+            max(c(M1, M_synth%*%sintetico6$solution.w))+sd(M1)),
+     xlab="Time", ylab="Mediator", 
+     main=colnames(data)[M], sub="Observed M(1) and Synthetic M(1)")
+# removed "add=TRUE," (antonio)
+lines(T_in:T_fi2, M_synth%*%sintetico6$solution.w, col="red")
+abline(v=(T_fi+1), lty=3)
+
+#Store the results on indirect effect and corresponding pre and post treatment RMSPE (automatic)
+ind1 <- tot1-dir1
+PRE_RMSPE_ind1<-mean(ind1[1:(length(T_in:T_fi))]^2)
+POST_RMSPE_ind1<-ind1[(length(T_in:T_fi)+1):length(T_in:T_fi2)]
+
+#Plot the results on total, direct and indirect effects in psot-treatment periods (automatic)
+plot((T_fi+1):T_fi2, tot1[(length(T_in:T_fi)+1):length(T_in:T_fi2)],
+     ylim=c(min(tot1, dir1, ind1)-max(sd(tot1), sd(dir1), sd(ind1)),
+            max(tot1, dir1, ind1)+max(sd(tot1), sd(dir1), sd(ind1))),
+     type="l", xlab="Time", ylab="Effects", col="red", lwd=3)
+lines((T_fi+1):T_fi2, 
+      dir1[(length(T_in:T_fi)+1):length(T_in:T_fi2)],
+      col="blue", lwd=3)
+lines((T_fi+1):T_fi2, 
+      ind1[(length(T_in:T_fi)+1):length(T_in:T_fi2)], 
+      col="green", lwd=3)
+legend(T_fi2-2, max(tot1, dir1, ind1)+max(sd(tot1), sd(dir1), sd(ind1)),
+       c("Total Effect", "Direct Effect", "Indirect Effect"),
+       fill=c("red", "blue", "green"), bty="n")
+abline(h=0)
+```
+
+
