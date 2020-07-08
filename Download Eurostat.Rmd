@@ -62,7 +62,7 @@ filter_nuts <- function(data, nuts) {
   return(result)
 }
 
-eurostat_geodata_60_2016 %>% head
+eurostat_geodata_60_2016 %>% head()
 
 # Get the total number of regions per conutry and level of NUTS:
 tot_number <- eurostat_geodata_60_2016 %>% as.data.frame() %>%
@@ -161,7 +161,7 @@ Note:
 
 * It would be good to review the reason of the 7-10 deviations we see on the graph.
 
-* data has some "extra regions NUTS X{1,2,3}" in some countries and one for NUTS level. I am not sure what do they count but have as third, fourth and 5th letter a Z instead of a number.
+* data has some "extra regions NUTS X{1,2,3}" in some countries and one for NUTS level. They account for extra regions (maritimal spaces, air space, and are optionals for countries to report) but have as third, fourth and 5th letter a Z instead of a number.
 
 * All NUTS regions of the same country start the same year, but some "NUTS 2 or 1" have data from 2017 while other NUTS3 have only until 2016
 
@@ -250,6 +250,54 @@ write.csv(e_emp, file = "data/eurostat/eurostat_employment.csv")
 https://ec.europa.eu/eurostat/web/cities/data/database
 * I would like to know the geografical definition of the city that builds these statistics. Is it the LAU definition? The functional urban areas?
 
+
+
+Compensation of employees (SAL, not EMP) (wages) by NACE activity	EU	NUTS 2
+- 2000	2017	1 year	Eurostat	nama_10r_2coe 
+- Million euros
+
+_PROBLEMS WITH FRANCE_
+
+```{r}
+down_eurostat("nama_10r_2coe") -> Comp_emp_Nace_N2
+
+Comp_emp_Nace_N2 <- Comp_emp_Nace_N2 %>%
+  filter(currency == "MIO_EUR")
+
+Comp_emp_Nace_N2$currency %>% table()
+```
+
+
+Hours worked by NUTS 2 regions: 
+
+_NOTE: France and Poland have MISSING_
+
+```{r}
+# 1000s Hours Worked by NACE activity	EU	NUTS 2	1980	2015	1 year	Eurostat, AMECO, OECD
+
+down_eurostat("nama_10r_2emhrw") -> emp_h_workN2
+
+write.csv(emp_h_workN2, "data/eurostat/hours_worked_nuts2.csv")
+```
+
+
+Investment in capital per NUTS 2 region:
+
+> ! France, NO and DE have less data of investment
+
+```{r}
+down_eurostat("nama_10r_2gfcf") -> investment_capital_nuts2
+
+investment_capital_nuts2 <- investment_capital_nuts2 %>% 
+  filter(currency == "MIO_EUR") %>%
+  select(-currency)
+
+investment_capital_nuts2
+
+# write.csv(investment_capital_nuts2, "data/eurostat/investment_capital_nuts2.csv")
+
+```
+
 ## GDP, GVA and employment for France, Poland, and others who did not had it:
 
 ```{r}
@@ -266,6 +314,21 @@ e_emp %>%
   mutate(CNTR_CODE = substr(geo, 1, 2) %>% as.factor()) %>%
   # filter(CNTR_CODE == "FR") %>% select(time) %>% table()
   select(CNTR_CODE) %>% table()
+
+Comp_emp_Nace_N2 %>%
+  mutate(CNTR_CODE = substr(geo, 1, 2) %>% as.factor()) %>%
+  # filter(CNTR_CODE == "FR") %>% select(time) %>% table()
+  select(CNTR_CODE) %>% table()
+
+# emp_h_workN2 %>%
+#   mutate(CNTR_CODE = substr(geo, 1, 2) %>% as.factor()) %>%
+#   # filter(CNTR_CODE == "FR") %>% select(time) %>% table()
+#   select(CNTR_CODE) %>% table()
+
+investment_capital_nuts2 %>%
+  mutate(CNTR_CODE = substr(geo, 1, 2) %>% as.factor()) %>%
+  # filter(CNTR_CODE == "FR") %>% select(time) %>% table()
+  select(CNTR_CODE) %>% table()
 ```
 
 1. Get the old data:
@@ -273,25 +336,47 @@ e_emp %>%
 ```{r}
 # Get them:
 
-old_gdp <- read_delim("data/refin.nama_10r_3gdp.dat",
+old_gdp <- read_delim("data/eurostat/refin.nama_10r_3gdp.dat",
                       "\t", 
                       trim_ws = TRUE,
                       col_types = cols(obs_decimals = col_skip(), 
                                        obs_status = col_skip())) 
 
-old_gva <- read_delim("data/refin.nama_10r_3gva.dat",
+old_gva <- read_delim("data/eurostat/refin.nama_10r_3gva.dat",
                       "\t", 
                       trim_ws = TRUE, # trim whitespace
                       col_types = cols(obs_decimals = col_skip(), 
                                        obs_status = col_skip()))
 
-old_emp <- read_delim("data/refin.nama_10r_3empers.dat",
+old_emp <- read_delim("data/eurostat/refin.nama_10r_3empers.dat",
                       "\t", 
                       trim_ws = TRUE, # trim whitespace
                       col_types = cols(obs_decimals = col_skip(), 
                                        obs_status = col_skip()))
 
-old_emp %>% head()
+# ! NOTE for this one france is still incomplete before 2008
+old_wages <- read_delim("data/eurostat/refin.nama_10r_2coe.dat",
+                      "\t", 
+                      trim_ws = TRUE, # trim whitespace
+                      col_types = cols(obs_decimals = col_skip(), 
+                                       obs_status = col_skip()))
+
+# # ! NOTE for this one is still incomplete before 2008, NOT WORTH IT
+# # I did not continued with this one for now until I have better data
+# old_hours2 <- read_delim("data/eurostat/refin.nama_10r_2emhrw.dat",
+#                       "\t", 
+#                       trim_ws = TRUE, # trim whitespace
+#                       col_types = cols(obs_decimals = col_skip(), 
+#                                        obs_status = col_skip()))
+
+# ! NOTE for this one france is still incomplete before 2008
+old_investment2 <- read_delim("data/eurostat/refin.nama_10r_2gfcf.dat",
+                      "\t", 
+                      trim_ws = TRUE, # trim whitespace
+                      col_types = cols(obs_decimals = col_skip(), 
+                                       obs_status = col_skip()))
+
+old_investment2 %>% head()
 old_emp$wstatus %>% table
 ```
 
@@ -314,10 +399,27 @@ old_emp <- old_emp %>%
   #filter_nuts(3) %>%
   select(-unit)
 
+old_wages <- old_wages %>%
+  mutate(CNTR_CODE = substr(geo, 1, 2) %>% as.factor()) %>%
+  filter(currency == "MIO_EUR")  # Delete MIO_NAC entries
+
+old_hours2 <- old_hours2 %>%
+  mutate(CNTR_CODE = substr(geo, 1, 2) %>% as.factor()) %>%
+  select(-unit)
+
+old_investment2 <- old_investment2 %>%
+  mutate(CNTR_CODE = substr(geo, 1, 2) %>% as.factor()) %>%
+  filter(currency == "MIO_EUR")  # Delete MIO_NAC entries
+
 # Review we have the data:
 table((old_gdp %>% dplyr::filter(CNTR_CODE == "PL"))$time) # %>% plot(type = 'l')
 table((old_gva %>% dplyr::filter(CNTR_CODE == "FR"))$time) # %>% plot(type = 'l')
 table((old_emp %>% dplyr::filter(CNTR_CODE == "FR"))$time) # %>% plot(type = 'l')
+table((old_wages %>% dplyr::filter(CNTR_CODE == "PL"))$time) # %>% plot(type = 'l')
+table((old_hours2 %>% dplyr::filter(CNTR_CODE == "FR"))$time) # %>% plot(type = 'l') # ! This is almost useless
+
+# table((old_investment2 %>% dplyr::filter(CNTR_CODE == "NO"))$time) # %>% plot(type = 'l') # This is completely useless (NO and DE)
+
 ```
 
 
@@ -379,8 +481,17 @@ old_emp_new_codes <- dict_2013_2016_all %>%
   mutate(geo = ifelse(test = is.na(`Code 2016`), # have the "latest geo" code
                       yes = `Code 2013`, 
                       no = `Code 2016`)) 
+
+old_wages_new_codes <- dict_2013_2016_all %>%
+  right_join(old_wages, by = c("Code 2013" = "geo")) %>%  #
+  mutate(geo = ifelse(test = is.na(`Code 2016`), # have the "latest geo" code
+                      yes = `Code 2013`, 
+                      no = `Code 2016`)) 
+
+
 # test:
-# old_emp_new_codes %>% filter(`Code 2013` == "FR241") %>% head()
+old_emp_new_codes %>% filter(`Code 2013` == "FR241") %>% head()
+old_wages_new_codes  %>% head()
 ```
 
 Tests and ideas on how the changes in NUTS 3 regions affect the statistics of GDP:
@@ -466,6 +577,17 @@ old_emp_new_codes %>%
          CNTR_CODE = substr(geo, 1, 2)) %>%
   select(wstatus, nace_r2, time, geo, values, CNTR_CODE) -> e_emp_complete
 
+# WAGES (Compensation for employees)
+
+Comp_emp_Nace_N2_complete <- old_wages_new_codes %>%
+  #filter(time < 2015) %>% # Exclude 2015
+  full_join(Comp_emp_Nace_N2) %>% # filter(geo == "FRK21", nace_r2 == "J") # %>% # New Ain (France, example)
+  mutate(values = ifelse(test = is.na(values), # If there is no "new data"
+                         yes = obs_value, # Take old data
+                         no = values),
+         CNTR_CODE = substr(geo, 1, 2)) %>%
+  select(currency, nace_r2, time, geo, values, CNTR_CODE)
+
 
 # Review I now have data for all the years (yes!)
 e_gdp_complete %>%
@@ -488,13 +610,26 @@ e_emp_complete %>%
   ) %>%
   arrange(time_min, desc(n_obs))
 
+Comp_emp_Nace_N2_complete %>%
+  dplyr::group_by(as.character(CNTR_CODE)) %>%
+  arrange(desc(time)) %>%
+  dplyr::summarise(
+    time_min = last(time),
+    time_max = first(time),
+    n_obs = n()
+  ) %>%
+  arrange(time_min, desc(n_obs))
+
 write.csv(e_gdp_complete, file = "data/eurostat/eurostat_gdp_complete.csv")
 write.csv(e_gva_complete, file = "data/eurostat/eurostat_gva_complete.csv")
 write.csv(e_emp_complete, file = "data/eurostat/eurostat_emp_complete.csv")
+# This one continues to have missing data 200-2008 for FR and NO:
+write.csv(Comp_emp_Nace_N2_complete, 
+          "data/eurostat/compensation_emp_nace_n2_complete.csv")
+
 ## France -> No NUTS 3 problems (¿)
 ## Poland -> Review NUTS 3 changes
 
-e_emp_complete %>% head()
 # e_emp_complete$nace_r2 %>% table()
 ```
 
@@ -518,18 +653,6 @@ Comune (municipality, smaller to nuts 3) -->  https://www.insee.fr/fr/recherche/
 * Jobs by sector (only 1982, 1990, 1999, 2006, 2011, 2016)
 * Jobs by type of sector (same years)
 
-
-Hours worked by NUTS 2 regions: 
-
-_NOTE: France and Poland have MISSING_
-
-```{r}
-# 1000s Hours Worked by NACE activity	EU	NUTS 2	1980	2015	1 year	Eurostat, AMECO, OECD
-
-down_eurostat("nama_10r_2emhrw") -> emp_h_workN2
-
-write.csv(emp_h_workN2, "data/eurostat/hours_worked_nuts2.csv")
-```
 
 Unemployment rate/persons	EU	NUTS 4 (metropolitan area) (imperfect)
 
@@ -620,23 +743,6 @@ down_eurostat("cens_01ramigr") -> act_pop_2001
 ```
 
 
-Investment in capital per NUTS 2 region:
-
-> ! France, NO and DE have less data of investment
-
-```{r}
-down_eurostat("nama_10r_2gfcf") -> investment_capital_nuts2
-
-investment_capital_nuts2 <- investment_capital_nuts2 %>% 
-  filter(currency == "MIO_EUR") %>%
-  select(-currency)
-
-investment_capital_nuts2
-
-# write.csv(investment_capital_nuts2, "data/eurostat/investment_capital_nuts2.csv")
-
-```
-
 Economically active population by sex, age and NUTS 2 regions
 - 1000s
 - 1999	2019	1 year
@@ -652,18 +758,6 @@ Economically active population by sex and age	EU	Metropolitan Regions	2002	2018	
 
 ```{r}
 down_eurostat("met_lfp3pop") -> ActPop_age_Metro
-```
-
-Compensation of employees (SAL, not EMP) (wages) by NACE activity	EU	NUTS 2
-- 2000	2017	1 year	Eurostat	nama_10r_2coe 
-- Million euros
-
-_PROBLEMS WITH FRANCE_
-
-```{r}
-down_eurostat("nama_10r_2coe") -> Comp_emp_Nace_N2
-
-# write.csv(Comp_emp_Nace_N2, "data/eurostat/compensation_emp_nace_n2.csv")
 ```
 
 

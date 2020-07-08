@@ -236,7 +236,7 @@ uar_sf <- uar_sf %>%
          !str_detect(cityname, "Manchester"),#  (planned by 2021)
          !str_detect(cityname, "Mersey River"),# Mersey River Crossings
          !str_detect(cityname, "Leeds"),#  (supposed 2020, now delayed)
-         !str_detect(cityname, "Glasgow"),# (came into effect 31 december 2018, too late, and will be fully implemented in 2022)
+         !str_detect(cityname, "Glasgow"),# ("came into effect" 31 december 2018, too late, and will be fully implemented in 2022)
          !str_detect(cityname, "Edinburgh"),#  (not yet applied)
          !str_detect(cityname, "Dundee"),#  (same)
          !str_detect(cityname, "Aberdeen"),#  (same) 
@@ -889,7 +889,8 @@ nuts.sf.treated %>%
 ## Save the data
 
 ```{r}
-## st_write(obj = nuts.sf, "data/nuts_sf.shp", delete_layer = TRUE)
+## st_write(obj = nuts.sf.treated, "data/nuts_sf.shp", 
+# delete_layer = TRUE)
 
 # saveRDS(nuts.sf.treated, "data/nuts_sf_treated")
 # nuts.sf.treated <- readRDS("data/nuts_sf_treated")

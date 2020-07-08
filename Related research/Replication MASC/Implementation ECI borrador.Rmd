@@ -43,7 +43,8 @@ data <- main_dta %>% as.data.frame() %>%
 
 
 # Delete all geos that have missing values on the variables of interest:
-data <- data[complete.cases(
+{
+  data <- data[complete.cases(
   data %>%
     select(geo, time, 
            unempR_T, mean_pol, # outcome and mediator
@@ -53,12 +54,17 @@ data <- data[complete.cases(
 incomplete <- which((data$geo %>% table(useNA = "no")) < length(unique(data$time)))
 
 data <- data %>%
-  filter(!(geo %in% names(incomplete))) %>%  # Delete incomplete series
-  mutate(num_id = as.numeric(as.factor(geo))) %>%
-  arrange(num_id)
+  filter(!(geo %in% names(incomplete))) # Delete incomplete series
+}
 
 # look at missign values
 data %>% is.na() %>% colSums()
+
+# Create a numerical id for each geo
+data <- data %>%
+  mutate(num_id = as.numeric(as.factor(geo))) %>%
+  arrange(num_id)
+
 
 # Create a list of controls
 controls <- data %>%

@@ -12,7 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r}
 # detach("package:raster", unload = TRUE)
 library(DBI)
-library(rgdal)
+# library(rgdal)
 ```
 
 
@@ -138,6 +138,7 @@ pop_age_aggr <- pop_age_aggr %>%
   )
 
 pop_age_aggr %>% head()
+
 ```
 
 ### Education
@@ -281,15 +282,29 @@ inv_cap %>% arrange(geo) %>% head()
 ### Wages (compensation) for workers:
 
 Total compensation of workers (million euros)
+NOTE: This is already corrected with additional EUROSTAT data
 
 ```{r}
+# wages_n2 <- read.csv(
+#   "data/eurostat/compensation_emp_nace_n2.csv")
+
 wages_n2 <- read.csv(
-  "data/eurostat/compensation_emp_nace_n2.csv")
+  "data/eurostat/compensation_emp_nace_n2_complete.csv")
+
+wages_n2 %>%
+  dplyr::group_by(as.character(CNTR_CODE)) %>%
+  arrange(desc(time)) %>%
+  dplyr::summarise(
+    time_min = last(time),
+    time_max = first(time),
+    n_obs = n()
+  ) %>%
+  arrange(time_min, desc(n_obs))
 
 wages_n2 <- wages_n2 %>%
   # filter(wstatus == "WHATEVER I WANT SAL OR EMP") %>%
   select(-c("X")) %>%
-  filter(currency == "MIO_EUR") %>%
+  # filter(currency == "MIO_EUR") %>%
   pivot_wider(id_cols = c("geo", "time"),
               names_from = c("nace_r2"),
               names_prefix = "wages_",
@@ -304,6 +319,7 @@ wages_n2 %>% arrange(geo) %>% head()
 ### Hours worked (in thousands):
 
 _NOTE: France and Poland have MISSING_
+_Additional eurostat data did not helped_
 
 ```{r}
 hours_n2 <- read.csv(
@@ -391,7 +407,7 @@ Create means for NUTS2 regions too:
 ```{r}
 # Assing the mean value of each on the 3 values weithted by the number of pol_rasters to the immidiately supperior NUTS2 region.
 
-dta_pollution_nuts <- pop_age_aggr %>% #Include NUTS 2 and NUTS 1 levels
+dta_pollution_nuts <- gdp_complete %>% #Include NUTS 2 and NUTS 1 levels
   select(geo, time) %>%
   full_join(dta_pollution_nuts) %>%
   arrange(geo) %>%
@@ -418,27 +434,64 @@ dta_pollution_nuts <- pop_age_aggr %>% #Include NUTS 2 and NUTS 1 levels
   filter(!is.nan(mean_pol))
 
 dta_pollution_nuts %>% head()
+
+dta_pollution_nuts 
 ```
+
 
 
 ## Unite them on a table by nuts-year:
 
 ```{r}
-nuts_time <- pop_age_aggr %>% # NUTS 3 vars:
-  left_join(gdp_complete) %>%
-  left_join(emp_complete) %>%
-  left_join(gva_complete) %>%
-  left_join(pop_dens) %>% 
+# from eurostat
+library(eurostat)
+all_geo <- eurostat_geodata_60_2016 %>% as.data.frame() %>%
+  select(geo)
+
+# nuts_time <- all_geo %>% # PAST NUTS_TIME
+#   # NUTS 3 vars:
+#   full_join(gdp_complete) %>% 
+#   left_join(pop_age_aggr) %>%
+#   left_join(emp_complete) %>%
+#   left_join(gva_complete) %>%
+#   left_join(pop_dens) %>% 
+#   # NUTS 2 vars:
+#   left_join(inv_cap) %>%
+#   left_join(wages_n2) %>%
+#   left_join(hours_n2) %>%
+#   left_join(active_pop_n2) %>%
+#   left_join(unemp_rate_n2) %>%
+#   left_join(unemp_n2) %>%
+#   left_join(pop_educ_NUTS2) %>%
+#   # Pollution data
+#   left_join(dta_pollution_nuts) %>%
+#   mutate(geo = as.factor(geo)) %>%
+#   arrange(geo, time)
+
+# # Some info is getting lost if i dont do full_merge
+# sum(!is.na(nuts_time))
+# sum(!is.na(temp))
+
+nuts_time <- all_geo %>%
+  # NUTS 3 vars:
+  full_join(gdp_complete) %>% 
+  full_join(pop_age_aggr) %>%
+  full_join(emp_complete) %>%
+  full_join(gva_complete) %>%
+  full_join(pop_dens) %>% 
   # NUTS 2 vars:
-  left_join(inv_cap) %>%
-  left_join(wages_n2) %>%
-  left_join(hours_n2) %>%
-  left_join(active_pop_n2) %>%
-  left_join(unemp_rate_n2) %>%
-  left_join(unemp_n2) %>%
+  full_join(inv_cap) %>%
+  full_join(wages_n2) %>%
+  full_join(hours_n2) %>%
+  full_join(active_pop_n2) %>%
+  full_join(unemp_rate_n2) %>%
+  full_join(unemp_n2) %>%
+  full_join(pop_educ_NUTS2) %>%
   # Pollution data
-  left_join(dta_pollution_nuts) %>%
-  mutate(geo = as.factor(geo))
+  full_join(dta_pollution_nuts) %>%
+  mutate(geo = as.factor(geo)) %>%
+  arrange(geo, time)
+
 
 # TO INCLUDE:
 # Education (2001 has not all the zones, NUTS2 is only for NUTS2)
@@ -453,6 +506,13 @@ nuts_time %>%
 nuts_time %>% is.na() %>% colSums() %>% as.data.frame()
 
 nuts_time %>% names()
+
+
+# Look at waswaw
+nuts_time %>%
+  filter(geo == "PL91") 
+# temp %>%
+#   filter(geo == "PL91") 
 
 dbWriteTable(db, "nuts_time", 
              value = nuts_time, 

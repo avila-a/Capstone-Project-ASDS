@@ -86,9 +86,13 @@ Tables:
 #### Get nuts_time (outcomes, mediators and controls)
 
 ```{r}
-dta <- dbGetQuery(db, "SELECT * from nuts_time")
-dta %>% filter(time == 2006)
-dta %>% names()
+nuts_time <- dbGetQuery(db, "SELECT * from nuts_time")
+nuts_time %>% filter(time == 2006)
+nuts_time %>% names()
+
+nuts_time %>%
+  filter(geo == "PL91") %>%
+  select(time)
 ```
 
 Create variables of interest (outcomes and controls)
@@ -102,7 +106,7 @@ Create variables of interest (outcomes and controls)
 # hours worked per person (abseentism/temporality)
 # (waiting to get data on hours)
 
-dta <- dta %>%
+nuts_time <- nuts_time %>%
   # dplyr::group_by(geo) %>% # 1000's hours/1000's employees
   mutate(hours_per_worker = hours_TOTAL/empl_TOTAL,
          hours_per_day = hours_per_worker/259) #approx
@@ -115,7 +119,7 @@ dta <- dta %>%
 # wages per worker
 # (waiting to get data on wages)
 
-dta <- dta %>%
+nuts_time <- nuts_time %>%
   # dplyr::group_by(geo) %>%
   mutate(wages_per_worker = 
            (wages_TOTAL*1000000)/(empl_TOTAL*1000), 
@@ -129,7 +133,7 @@ dta <- dta %>%
 
 # wage/hour worked (productivity?)
 
-dta <- dta %>%
+nuts_time <- nuts_time %>%
   # dplyr::group_by(geo) %>%
   mutate(wage_per_hour = 
            (wages_TOTAL*1000000)/(hours_TOTAL*1000)) #approx
@@ -145,7 +149,7 @@ dta <- dta %>%
 
 # Employment rate (with respect to active pop or "wotking age pop")
 
-dta <- dta %>%
+nuts_time <- nuts_time %>%
   # dplyr::group_by(geo) %>%
   mutate(empl_rate_active = # both in thousands
            (empl_TOTAL*1000)/(active_T_Y_GE15*1000),
@@ -163,12 +167,12 @@ dta <- dta %>%
 # Dependency ratio (NUTS 2)
 
 # Share of Women in the labor market
-dta <- dta %>%
+nuts_time <- nuts_time %>%
   # dplyr::group_by(geo) %>%
   mutate(active_F_share = # both in thousands
            `active_F_Y15-64`/`active_M_Y15-64`)
 
-dta$active_F_share %>% hist(breaks = 30)
+nuts_time$active_F_share %>% hist(breaks = 30)
 
 ## (for NUTS 3)
 
@@ -182,7 +186,7 @@ dta$active_F_share %>% hist(breaks = 30)
 # mean age
 # mortality and birth rate
 
-dta %>% names()
+nuts_time %>% names()
  # others to do GDP and Productivity: GDP/capita, Investment/capita, wage levels, 
 ```
 
@@ -190,7 +194,7 @@ dta %>% names()
 ### Small analysis of the volatility of data:
 
 ```{r}
-get_volatility <- function(data = dta, 
+get_volatility <- function(data = nuts_time, 
                            CNTR_CODE = "DE", 
                            time_vector = 2000:2019,
                            variable = "gdp_eur_hab",
@@ -219,7 +223,7 @@ get_volatility <- function(data = dta,
 
 
 ```{r}
-temp2 <- get_volatility(data = dta, CNTR_CODE = "DE",
+temp2 <- get_volatility(data = nuts_time, CNTR_CODE = "DE",
                        time_vector = 2000:2019,
                        variable = "unempR_T")
 # temp2
@@ -252,8 +256,47 @@ nuts_treated %>% as.data.frame() %>% head()
 main_dta <- nuts_treated %>% 
   as.data.frame() %>%
   select(-geometry) %>%
-  right_join(dta, by = "geo")
+  right_join(nuts_time, by = "geo")
+
+main_dta %>% names()
+main_dta %>% head()
 ```
+
+### Searcher for NA values:
+
+```{r fig.height= 8, fig.width= 6}
+countries <- main_dta$country %>% unique()
+countries <- countries[-c(3, 23, 34)]
+
+# i <- 1
+for (c in countries[1:length(countries)]){
+  # print(i)
+  # i <- i+1
+  temp <- main_dta %>%
+    filter(country == c)
+  
+  sum_na <- temp %>%
+  dplyr::select(unempR_T, urb_index, gdp_eur_hab) %>%
+  is.na() %>% colSums() %>% max()
+  if(sum_na == nrow(temp)){
+    print(paste0("The country ", c, " has no obs"))
+    next
+  }
+  
+  panelView(1 ~ unempR_T + urb_index + gdp_eur_hab, 
+          data = temp, 
+          index = c("geo","time"), 
+          ignore.treat = TRUE,
+          xlab = "Year", 
+          ylab = "NUTS", 
+          by.timing = TRUE,
+          main = c
+          # axis.lab.gap = c(0,60)
+          # show.id = c(1:25), # number id of ones to show
+          )
+}
+```
+
 
 # Synthetic control method:
 
@@ -394,21 +437,48 @@ main_dta %>%
 
 # Prepare data for NUTS 2 synthetic control -> restrict controls
 n2_dta <- main_dta %>%
-  filter(treated_uz | contr_restr_50km) %>% # Controls are 50km away from cities that have applied a LEZ o similar mesure, probably have to bi limited to one treated only 
+  filter(treated_uz | contr_restr_60km) %>% # Controls are 50km away from cities that have applied a LEZ o similar mesure, probably have to bi limited to one treated only 
   filter(nuts_level == 2) # Not necessary, If I use a variable that has only NUTS 2 regions
 
 # panelView(Y ~ D, data = main_dta,  index = c("id","time"), pre.post = TRUE) 
+
+# {
+#   n2_dta <- n2_dta[complete.cases(
+#   n2_dta %>%
+#     select(geo, time, # unempR_T
+#            # mean_pol, # outcome and mediator
+#            # gdp_eur_hab # urb_index, active_F_share, gdp_eur_hab, wages_per_worker # controls
+#            )), ]
+# 
+# incomplete <- which((n2_dta$geo %>% table(useNA = "no")) < length(unique(n2_dta$time)))
+# 
+# n2_dta <- n2_dta %>%
+#   filter(!(geo %in% names(incomplete))) %>%  # Delete incomplete series
+#   mutate(num_id = as.numeric(as.factor(geo))) %>%
+#   arrange(num_id)
+# }
+
+
+
+# incomplete_maps <- nuts.sf.treated %>%
+#   filter(NUTS_ID %in% names(incomplete))
+# 
+# leaflet() %>% addTiles() %>%
+#   addPolygons(data = incomplete_maps)
+
 ```
 
 ### Try Gsynth N2
 
 ```{r}
-out_n2 <- gsynth(unempR_T ~ is_inagurated +
-                   active_F_share, # + gdp_eur_hab, 
+out_n2 <- gsynth(unempR_T ~ is_inagurated,
+                 # + wages_per_worker
+                 # + gdp_eur_hab,
+                 # urb_index, 
                data = n2_dta, 
                index = c("geo","time"), 
                na.rm = TRUE, # remove 
-               force = "two-way", # unit or time fixed effects or both?
+               force = "none", # unit or time fixed effects or both?
                # CV = TRUE, 
                # r = c(0, 4), # an integer specifying the number of factors. If CV = TRUE, the cross validation procedure will select the optimal number of factors from r to 5.
                se = TRUE, 
@@ -429,6 +499,7 @@ plot(out_n2, type = "counterfactual",
      raw = "none", main="") # Why the final dip?
 
 plot(out_n2, type = "counterfactual", id = "DE30") # Berlin
+plot(out_n2, type = "counterfactual", id = "DE21") # 
 plot(out_n2, type = "counterfactual", id = "DE13") # Freiburg
 plot(out_n2, type = "counterfactual", id = "DE50") # Bremen 
 
@@ -442,13 +513,46 @@ plot(out_n2, type = "counterfactual",
      # ylim = c(-5,35),
      theme.bw = TRUE)
 
+
 plot(out_n2, type = "loadings")
 ```
+
+```{r}
+# out_n2$xi
+```
+
 
 Things left to do:
  * Know the donnor pool of each treated
  * know the average characteristics of each treated and its synthetic control + the variance (max and min of those characteristics from the donor pool)
  * Unemployment counterfactual for ATE goes bellow 0%,
+
+```{r}
+# Know the donor pool of each treated:
+
+weights_result <- out_n2$wgt.implied %>% 
+  as_tibble(rownames = "NUTS_ID")
+
+
+donor_pool <- nuts.sf.treated %>%
+  filter(LEVL_CODE == 2) %>%
+  left_join(weights_result) %>%
+  filter(!is.na(DE30))
+
+donor_pool %>% as.data.frame() %>%
+  select(NUTS_ID, DE30, DE13)
+
+
+leaflet() %>% addTiles() %>%
+  addPolygons(data = donor_pool, weight = 0.5, color = "black",
+              fillColor = ~colorQuantile("RdYlGn",
+                      donor_pool$DE30)(donor_pool$DE30),
+              popup = paste0(
+                "<b>", donor_pool$NUTS_ID, "</b> <br/>",
+                "<b> Weight Berlin </b>", donor_pool$DE30, "<br/>",
+                "<b> Weight Freiburg </b>", donor_pool$DE13, "<br/>")
+              )
+```
 
 
 ### Try Gsynth N3
@@ -678,3 +782,72 @@ https://andrewcbaker.netlify.com/2020/01/01/what-can-we-say-about-medical-mariju
 
 ## How much pollution comes from cars? (and other info from the EC):
 https://ec.europa.eu/environment/air/cleaner_air/
+
+## PLOTS:
+
+### Small analysis of the application of LEZ zones in Germany:
+
+```{r}
+
+
+```
+
+```{r}
+umweltzonen <- dbGetQuery(db, "SELECT * from umweltzonen")
+um <- umweltzonen %>%
+  mutate(Stage_1 = as.Date(Stage_1, "%d.%m.%Y"),
+         Stage_2 = as.Date(Stage_2, "%d.%m.%Y"),
+         Stage_3 = as.Date(Stage_3, "%d.%m.%Y"))
+
+all <- expand.grid(LEZ = um$LEZ, 
+                   year = seq(2008, 2020),
+                   month = seq(01, 12), 
+                   # month = c("01", "02", "03", "04", "05", "06",
+                   #          "07", "08", "09", "10", "11", "12"), 
+                   stringsAsFactors = FALSE)
+
+panel_zones <- all %>%
+  left_join(um) %>%
+  mutate(date = as.POSIXct(paste0(year,"-", month, "-01" )),
+         # LEZ = substr(LEZ, 1, 24),
+         LEZ = sub(" *\\(.*", "", LEZ), # Everything until a "("
+         status = ifelse(date < Stage_1, 0,
+                          if_else(date < Stage_2, 1, 
+                                  if_else(date < Stage_3, 2, 3, 
+                                          missing = 2)))
+         # date_factor = paste0(year(date), "-", ifelse(
+         #   month(date)<9, paste0("0", month(date)), month(date))),
+         ) %>%
+  arrange(Stage_3) %>%
+  arrange(Stage_2) %>%
+  arrange(Stage_1) %>%
+  mutate(LEZ_factor = fct_inorder(LEZ)) %>%
+  select(LEZ, date, status, year, month, LEZ_factor)
+panel_zones
+```
+
+
+
+```{r, fig.height=8, fig.width= 9}
+# png(filename = "LEZ application germany.png", 
+#     width = 750, height = 1000, res = 100)
+panelView(month ~ status, data = panel_zones, 
+          index = c("LEZ_factor", "date"), 
+          by.timing = TRUE, 
+          axis.lab.gap = c(23,0), 
+          # axis.lab = "time",
+          background = "white",
+          main = "",
+          xlab = "", ylab = "", pre.post = TRUE,
+          legend.labs = c("No LEZ applied", 
+                          "Only red, yellow or green sticker", 
+                          "Only yellow or green sticker", "Only green stiker"),
+          color = c("grey90", "red1", "yellow1", "green4"))
+# dev.off()
+
+# devtools::install_github('xuyiqing/panelView')
+# RColorBrewer::brewer.pal.info
+```
+
+(Image saved in png file)
+
