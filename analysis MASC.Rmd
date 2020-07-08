@@ -25,12 +25,6 @@ Get data:
 
 ```{r}
 main_dta <- readRDS("data/main_dta.rds")
-
-data <- main_dta %>% as.data.frame() %>%
-  # If I use a variable that has only NUTS 2 regions
-  filter(nuts_level == 2)  %>% 
-  # Optional? restrict years ro 2001-2016, the period of mediator
-  filter(time >= 2001 & time <= 2016)
 ```
 
 Restrict dataset so it becomes ballanced:
@@ -67,29 +61,6 @@ balanced <- function(data, ID, TIME, VARS, required=c("all","shared")) {
 
 
 ```{r}
-control_vars_labor <- c("urb_index", 
-                        "active_F_share", 
-                        "gdp_eur_hab",
-                        "wages_per_worker" # controls
-                        # "empl_prop_F",
-                        # "empl_prop_K_N"
-                        # "empl_prop_A", , "empl_prop_B_E", "empl_prop_O_U",
-                        # "empl_prop_G_J", 
-)
-# temp <- balanced(data = data, TIME = "time", ID = "geo", 
-#                  VARS = control_vars_labor)
-# temp %>% is.na() %>% colSums()
-
-# data %>%
-#   filter(geo == name_treat) %>%
-#   select(control_vars_labor, outcome, mediator)
-```
-
-
-
-
-
-```{r}
 init_sc <- function(data = data, name_treat, outcome, mediator, 
                     id_col, col_time, delay = 0,
                     t_in, 
@@ -99,7 +70,7 @@ init_sc <- function(data = data, name_treat, outcome, mediator,
   
   # restrict the sample to a balanced panel
   data_temp <- balanced(data = data, TIME = "time", ID = "geo", 
-                 VARS = c(control_vars_labor, 
+                 VARS = c(control_vars, 
                           # id_col, col_time, 
                           outcome, mediator))
   
@@ -157,8 +128,35 @@ init_sc <- function(data = data, name_treat, outcome, mediator,
   controls <- data_temp[!(data_temp[,col_id]==name_treat) &
                           data_temp[,col_time]==T_in, col_id_num]
   
-  assign("data", data_temp , envir = .GlobalEnv)      # !!!
   assign("controls", controls , envir = .GlobalEnv)      # !!!
+  
+  
+  #Add fake pre-treatment outcomes to optimize on pre-treatment mediator values (automatic) during the choice of matrix V
+  
+  #If it is decided to select the weights V to use manually skip these lines of code
+  
+  # Note Antonio: This restricts data on the "study period"
+  data_temp <- data_temp[which(data_temp[,col_time]>=(T_in-delay) &
+                       data_temp[,col_time]<=T_fi2),]
+  
+  data2 <- data_temp[which(data_temp[,col_time]>=(T_in-delay) &
+                        data_temp[,col_time]<=(T_fi-delay)),]
+  data2[,Y] <- data2[,M]
+  data2 <- data2[order(data2[,col_id_num], data2[,col_time]),]
+  
+  data2[,col_time] <- rep((T_in-length(T_in:T_fi)-delay):(T_in-1-delay),
+                          length(controls)+1) # or controls+1
+  data_temp <- rbind(data2, data_temp)
+  data_temp <- data_temp[order(data_temp[,col_id_num], decreasing=F),]
+  # remove(data2)
+  
+  # #Fake starting time (automatic)
+  # #This starting time is required if the pre-treatment mediator values are added as fake outcomes (see above), otherwise run the commented line below
+  T_inf <- T_in-length(T_in:T_fi)-delay
+  # T_inf <- T_in
+  
+  assign("T_inf", T_inf , envir = .GlobalEnv)      # !!!
+  assign("data", data_temp , envir = .GlobalEnv)      # !!!
   
   #Create all the required constraints (automatic) the constraints on all pre-treatment outcome until one year before intervention and pre-treatment mediator until two years before intervention)
   
@@ -184,50 +182,46 @@ init_sc <- function(data = data, name_treat, outcome, mediator,
   # }
   
   # Antonio: add urb_index, active_F_share, gdp_eur_hab as controls
-  include_add_controls <- function(data, controls, time){
+  include_add_controls <- function(data, controls, times){
     id_controls <- which(names(data) %in% controls)
     for (c in id_controls){
-      pretreat4[[length(pretreat4)+1]] <- list(c, time, "mean")
+      pretreat4[[length(pretreat4)+1]] <- list(c, times, "mean")
     }
     return(pretreat4)
   }
   
   pretreat4 <- include_add_controls(
-    data = data, 
-    controls = c("urb_index", #"gdp_eur_hab", 
-                 "wages_per_worker", "active_F_share"),
-    time = T_fi
+    data = data_temp, 
+    controls = control_vars,
+    times = T_fi
   )
   
   assign("pretreat4", pretreat4 , envir = .GlobalEnv)      # !!!
+  
 }
-
-# Control Vars unemployment / temporality
-control_vars_labor <- c("urb_index", 
-                        "active_F_share", 
-                        "gdp_eur_hab",
-                        "wages_per_worker" # controls
-                        # "empl_prop_F",
-                        # "empl_prop_K_N"
-                        # "empl_prop_A", , "empl_prop_B_E", "empl_prop_O_U",
-                        # "empl_prop_G_J", 
-)
-
-init_sc(data = data,
-        name_treat = "DE30",
-        outcome = "unempR_T",
-        mediator = "mean_pol",
-        id_col = "geo",
-        # id_col_num = "num_id",
-        col_time = "time",
-        t_in = 2001, # First year of polution data,
-        announced_or_implemented = "A",
-        tfi2 = 2016,
-        control_vars = control_vars_labor)
 ```
 
-Delete all geos that have missing values on the variables of interest:
+Function to perform SC
 
+```{r}
+
+```
+
+
+
+
+Look at a list of treated
+
+```{r}
+data %>%
+  filter(treated_uz == TRUE) %>%
+  select(nuts_name, geo) %>% unique()
+```
+
+## Prepare for Synth
+
+* Especify the variables, periods and the delay of the mediator
+* Name of the control units in the column with ID col_id (if the control units are all units in the database except the treated then do not run the two following lines)
 
 ## Calculation of total, direct and Indirect effects.
 
@@ -240,22 +234,21 @@ Delete all geos that have missing values on the variables of interest:
 * mediator and
 * outcome
 
-```{r}
-# look at missign values
-data %>% is.na() %>% colSums()
 
-# Look at a list of treated
-data %>%
-  filter(treated_uz == TRUE) %>%
-  select(nuts_name, num_id, geo) %>% unique()
-
-# Could restrict time to 2001-2016
-```
-
-
-Especify the variables, periods and the delay of the mediator:
 
 ```{r}
+# Control Vars unemployment / temporality
+control_vars_labor <- c("urb_index", 
+                        "active_F_share", 
+                        "gdp_eur_hab",
+                        "wages_per_worker" # controls
+                        # "empl_prop_F",
+                        # "empl_prop_K_N"
+                        # "empl_prop_A", , "empl_prop_B_E", "empl_prop_O_U",
+                        # "empl_prop_G_J", 
+)
+
+
 # # Name of the treated unit in the column with ID "col_id"
 # 
 # # DE30 -> Berlin, No clear effect (DE+ CZ-ostrava)
@@ -263,42 +256,27 @@ Especify the variables, periods and the delay of the mediator:
 # # DE21 Bayern (clear ¿significant? effects, oposite than intuition)
 # # DED5 -> Liepzig (!! not in dataset for missing values)
 # # DE13 -> Freiburg, tourist city. (small) INCLREASE? in pollution, reduction in unemployment
+
+data <- main_dta %>% as.data.frame() %>%
+  # If I use a variable that has only NUTS 2 regions
+  filter(nuts_level == 2)  %>% 
+  # Optional? restrict years ro 2001-2016, the period of mediator
+  filter(time >= 2001 & time <= 2016)
+
+init_sc(data = data,
+        name_treat = "DE30",
+        outcome = "unempR_T",
+        mediator = "mean_pol_gdp",
+        id_col = "geo",
+        # id_col_num = "num_id",
+        col_time = "time",
+        t_in = 2001, # First year of polution data,
+        announced_or_implemented = "A",
+        tfi2 = 2016,
+        control_vars = control_vars_labor)
 ```
 
-Name of the control units in the column with ID col_id (if the control units are all units in the database except the treated then do not run the two following lines)
-
-```{r}
-#Add fake pre-treatment outcomes to optimize on pre-treatment mediator values (automatic) during the choice of matrix V
-#If it is decided to select the weights V to use manually skip these lines of code
-
-# Note Antonio: This restricts data on the "study period"
-data <- data[which(data[,col_time]>=(T_in-delay) &
-                     data[,col_time]<=T_fi2),]
-
-data2 <- data[which(data[,col_time]>=(T_in-delay) &
-                    data[,col_time]<=(T_fi-delay)),]
-data2[,Y] <- data2[,M]
-data2 <- data2[order(data2[,col_id_num], data2[,col_time]),]
-
-data2[,col_time] <- rep((T_in-length(T_in:T_fi)-delay):(T_in-1-delay),
-                        length(controls)+1) # or controls+1
-data <- rbind(data2, data)
-data <- data[order(data[,col_id_num], decreasing=F),]
-remove(data2)
-
-#Fake starting time (automatic)
-#This starting time is required if the pre-treatment mediator values are added as fake outcomes (see above), otherwise run the commented line below
-T_inf <- T_in-length(T_in:T_fi)-delay
-
-
-# T_inf <- T_in
-
-```
-
-
-```{r}
-# data %>% is.na() %>%colSums()
-```
+Delete all geos that have missing values on the variables of interest:
 
 
 ### Total Effect
