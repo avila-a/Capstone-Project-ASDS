@@ -396,8 +396,7 @@ policy_map <- leaflet() %>%
 
 # policy_map
 
-htmlwidgets::saveWidget(policy_map, file="policy_map.html")
-# getwd()
+# htmlwidgets::saveWidget(policy_map, file="policy_map.html")
 ```
 
 #### From Umweltbundesamt
@@ -406,6 +405,16 @@ htmlwidgets::saveWidget(policy_map, file="policy_map.html")
 db <- dbConnect(RSQLite::SQLite(), "data/capstonedb")
 umweltzonen <- dbGetQuery(db, "SELECT * from umweltzonen")
 dbDisconnect(db)
+
+# Add year variables:
+umweltzonen <- umweltzonen %>%
+  mutate(
+    year_stage1 = as_date(Stage_1, format = "%d.%m.%Y") %>% year(),
+    year_stage2 = as_date(Stage_2, format = "%d.%m.%Y") %>% year(),
+    year_stage3 = as_date(Stage_3, format = "%d.%m.%Y") %>% year(),
+    year_announced = as_date(Announcment, format = "%d.%m.%Y") %>% year())
+
+
 umweltzonen %>% head()
 # umweltzonen %>% dim()
 ```
@@ -424,7 +433,7 @@ for (i in 1:length(umweltzonen$LEZ)){
 }
 temp2 <- lapply(temp, as.data.frame)
 temp2 <- lapply(temp2, rownames_to_column, var = "latlong")
-temp2[[1]]
+# temp2[[1]]
 temp2 <- data.table::rbindlist(temp2, use.names = FALSE)
 temp2$id <- rep(x = 1:58, 2) %>% sort()
 temp2 <- temp2 %>% pivot_wider(names_from = "latlong",
@@ -437,6 +446,15 @@ umweltzonen %>% names()
 # umweltzonen
 ```
 
+##### Look if some have been applied very recently:
+
+```{r}
+umweltzonen %>% as.data.frame() %>%
+  arrange(desc(year_stage1)) %>%
+  select(year_stage1) %>% table()
+```
+
+No, I should keep them all.
 
 ```{r}
 # saveRDS(umweltzonen, "data/umweltbundesamt/umweltonen.rds")
@@ -464,7 +482,7 @@ get_buffer_km <- function(data_points, km){
     st_transform(crs = "+proj=longlat +datum=WGS84")
 }
 
-buffer_50_uar <- get_buffer_km(uar_sf, 50)
+buffer_60_uar <- get_buffer_km(uar_sf, 60)
 
 # ! Note! I don't need to do a buffer of 50 and 100 km of small (city-center) urban access regulations.
 # I could restrict to do this for sizable LEZ
@@ -479,16 +497,16 @@ nuts.sf <- nuts.sf %>%
           nuts.sf, uar_sf)$NUTS_ID %>% 
            unique()),
       TRUE, FALSE),
-    with_uar_50km = ifelse(
+    with_uar_30km = ifelse(
       NUTS_ID %in% 
         (st_intersection(
-          nuts.sf, get_buffer_km(uar_sf, 50))$NUTS_ID %>%
+          nuts.sf, get_buffer_km(uar_sf, 30))$NUTS_ID %>%
            unique()),
       TRUE, FALSE),
-    with_uar_100km = ifelse(
+    with_uar_60km = ifelse(
       NUTS_ID %in% 
         (st_intersection(
-          nuts.sf, get_buffer_km(uar_sf, 100))$NUTS_ID %>%
+          nuts.sf, get_buffer_km(uar_sf, 60))$NUTS_ID %>%
            unique()),
       TRUE, FALSE),
     
@@ -499,16 +517,16 @@ nuts.sf <- nuts.sf %>%
           nuts.sf, gzones_sf)$NUTS_ID %>% 
            unique()),
       TRUE, FALSE),
-    with_gzones_50km = ifelse(
+    with_gzones_30km = ifelse(
       NUTS_ID %in% 
         (st_intersection(
-          nuts.sf,  get_buffer_km(gzones_sf, 50))$NUTS_ID %>%
+          nuts.sf,  get_buffer_km(gzones_sf, 30))$NUTS_ID %>%
            unique()),
       TRUE, FALSE),
-    with_gzones_100km = ifelse(
+    with_gzones_60km = ifelse(
       NUTS_ID %in% 
         (st_intersection(
-          nuts.sf, get_buffer_km(gzones_sf, 100))$NUTS_ID %>%
+          nuts.sf, get_buffer_km(gzones_sf, 60))$NUTS_ID %>%
            unique()),
       TRUE, FALSE),
     
@@ -519,16 +537,16 @@ nuts.sf <- nuts.sf %>%
           nuts.sf, umweltzonen)$NUTS_ID %>% 
            unique()), 
       TRUE, FALSE),
-    with_umweltzonen_50km = ifelse(
+    with_umweltzonen_30km = ifelse(
       NUTS_ID %in% 
         (st_intersection(
-          nuts.sf, get_buffer_km(umweltzonen, 50))$NUTS_ID %>%
+          nuts.sf, get_buffer_km(umweltzonen, 30))$NUTS_ID %>%
            unique()), 
       TRUE, FALSE),
-    with_umweltzonen_100km = ifelse(
+    with_umweltzonen_60km = ifelse(
       NUTS_ID %in% 
         (st_intersection(
-          nuts.sf, get_buffer_km(umweltzonen, 100))$NUTS_ID %>%
+          nuts.sf, get_buffer_km(umweltzonen, 60))$NUTS_ID %>%
            unique()),
       TRUE, FALSE)
   )
@@ -536,7 +554,7 @@ nuts.sf <- nuts.sf %>%
 # + Include all cities mentioned in umweltbundesamt as non-controls
 
 ggplot(nuts.sf %>%
-         filter(with_uar_50km == TRUE)) +
+         filter(with_uar_60km == TRUE)) +
   geom_sf(aes(color = as.factor(LEVL_CODE))) +
   geom_sf(data = buffer_50_uar) +
   geom_sf(data = umweltzonen)
@@ -748,16 +766,16 @@ nuts.sf <- nuts.sf %>%
       with_uar_point ~ FALSE,
       TRUE ~ TRUE # if none of the past conditions, it's a control
     ),
-    contr_restr_50km = case_when(
-      with_umweltzonen_50km ~ FALSE,
-      with_gzones_50km ~ FALSE,
-      with_uar_50km ~ FALSE,
+    contr_restr_30km = case_when(
+      with_umweltzonen_30km ~ FALSE,
+      with_gzones_30km ~ FALSE,
+      with_uar_30km ~ FALSE,
       TRUE ~ TRUE # if none of the past conditions, it's a control
     ),
-    contr_restr_100km = case_when(
-      with_umweltzonen_100km ~ FALSE,
-      with_gzones_100km ~ FALSE,
-      with_uar_100km ~ FALSE,
+    contr_restr_60km = case_when(
+      with_umweltzonen_60km ~ FALSE,
+      with_gzones_60km ~ FALSE,
+      with_uar_60km ~ FALSE,
       TRUE ~ TRUE # if none of the past conditions, it's a control
     )
   )
@@ -814,7 +832,7 @@ Include all relevant data in nuts.sf and save it.
 #   left_join(min_time) %>%
 #   select(-c("FID")) # duplicated
 
-nuts.sf %>% head(20)
+nuts.sf %>% names()
 ```
 
 
@@ -843,19 +861,20 @@ nuts.sf.treated %>%
   # select(NUTS_ID, NUTS_NAME) %>%
   unique()
 
+# Delete those regions that have more than one NUTS
 nuts.sf.treated <- nuts.sf.treated %>%
   filter(more_one_nuts == 0) %>%
   select(-more_one_nuts)
 
-nuts.sf.treated <- nuts.sf.treated %>%
-  group_by(NUTS_ID) %>%
-  mutate(
-    year_stage1 = as_date(Stage_1, format = "%d.%m.%Y") %>% year(),
-    year_stage2 = as_date(Stage_2, format = "%d.%m.%Y") %>% year(),
-    year_stage3 = as_date(Stage_3, format = "%d.%m.%Y") %>% year(),
-    year_announced = as_date(Announcment, format = "%d.%m.%Y") %>% year(),
-  ) %>%
-  ungroup()
+# nuts.sf.treated <- nuts.sf.treated %>%
+#   group_by(NUTS_ID) %>%
+#   mutate(
+#     year_stage1 = as_date(Stage_1, format = "%d.%m.%Y") %>% year(),
+#     year_stage2 = as_date(Stage_2, format = "%d.%m.%Y") %>% year(),
+#     year_stage3 = as_date(Stage_3, format = "%d.%m.%Y") %>% year(),
+#     year_announced = as_date(Announcment, format = "%d.%m.%Y") %>% year(),
+#   ) %>%
+#   ungroup()
 
 nuts.sf.treated %>% head()
 ```
@@ -863,7 +882,7 @@ nuts.sf.treated %>% head()
 ```{r}
 nuts.sf.treated %>%
   # filter(str_detect(NUTS_NAME, "Freiburg")) %>%
-  filter(NUTS_ID == "UKF3")
+  filter(NUTS_ID == "DEC0")
 ```
 
 
@@ -882,7 +901,7 @@ temp_treated <- nuts.sf.treated %>%
          LEVL_CODE == 3)
 
 temp_control <- nuts.sf.treated %>%
-  filter(contr_restr_50km == TRUE,
+  filter(contr_restr_60km == TRUE,
          LEVL_CODE == 3)
 
 treated_and_controls <- leaflet() %>% 
@@ -921,7 +940,7 @@ temp_treated <- nuts.sf.treated %>%
          LEVL_CODE == 2)
 
 temp_control <- nuts.sf.treated %>%
-  filter(contr_restr_50km == TRUE,
+  filter(contr_restr_60km == TRUE,
          LEVL_CODE == 2)
 
 treated_and_controls_2 <- leaflet() %>% 

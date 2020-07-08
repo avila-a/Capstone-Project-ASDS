@@ -30,7 +30,7 @@ d <- read.dta("repgermany.dta")
 
 dta_synth <- main_dta %>% as.data.frame() %>%
   # Controls are 50km away from cities that have applied a LEZ o similar mesure, probably have to bi limited to one treated only 
-  filter(treated_uz | contr_restr_50km) %>% 
+  filter(treated_uz | contr_restr_60km) %>% 
   # Only NUTS 2 regions
   filter(nuts_level == 2)  %>% 
   # create numeric id
@@ -91,7 +91,7 @@ dta_synth %>%
 # dta_synth$num_id %>% table() # all geos are complete
 
 controls <- dta_synth %>%
-  filter(contr_restr_50km == TRUE) %>%
+  filter(contr_restr_60km == TRUE) %>%
   select(num_id) %>% unique()
 controls <- controls$num_id
 
@@ -132,9 +132,9 @@ dataprep.out <-
 synth.out <- 
   synth(
         data.prep.obj = dataprep.out,
-        # Margin.ipop=.005, 
-        # Sigf.ipop=7, 
-        # Bound.ipop=6
+        Margin.ipop=.005,
+        Sigf.ipop=7,
+        Bound.ipop=6
         )
 ```
 

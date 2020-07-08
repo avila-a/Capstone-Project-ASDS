@@ -36,16 +36,11 @@ library(stringr)
 # load("C:/Users/Alessandra/Documents/Dottorato/Visiting/data2.RData")
 
 data <- main_dta %>% as.data.frame() %>%
-  # # Controls are 50km away from cities that have applied a LEZ o similar mesure, probably have to bi limited to one treated only 
-  # filter(treated_uz | contr_restr_50km) %>% 
-  # Not necessary, If I use a variable that has only NUTS 2 regions
+  # If I use a variable that has only NUTS 2 regions
   filter(nuts_level == 2)  %>% 
-  # # only keep one treated and all controls
-  # filter(contr_restr_50km | geo == "DE30") %>%
-  # # create numeric id
-  # mutate(num_id = as.numeric(as.factor(geo))) %>%
   # Optional? restrict years ro 2001-2016, the period of mediator
   filter(time >= 2001 & time <= 2016)
+
 
 # Delete all geos that have missing values on the variables of interest:
 data <- data[complete.cases(
@@ -67,8 +62,8 @@ data %>% is.na() %>% colSums()
 
 # Create a list of controls
 controls <- data %>%
-  filter(contr_restr_50km == TRUE) %>%
-  filter(geo != "LU00") %>% # REMOVE LUXEMBOURG (ROBUSTNESS TEST)
+  filter(contr_restr_60km == TRUE) %>%
+  # filter(geo != "LU00") %>% # REMOVE LUXEMBOURG (ROBUSTNESS TEST)
   select(geo) %>% unique()
 controls <- controls$geo
 

@@ -124,7 +124,7 @@ GET DATA
 - [ ] Choose which Cities I will start with
 
   - [ ] Choose based on Relevance, if it's NUTS2, better, If I have the geography, better.
-  - [ ] Find the name of the city that had an specially bad effect (small city in the border) (possibly Aachen)
+  - [ ] Find the name of the city that had an specially bad effect (small city in the border) (possibly Aachen, but its really Freiburg)
 
 - [ ] Review that all sources and statistics make sense in size and in interpretation.
 
@@ -177,12 +177,12 @@ JULY
 - 6-10: Finish data cleaning and hopefully do first analysis before last meeting. Look if ratio signal/data is good enough for Synthetic Control
 - 11-13: Write skeleton of research explaining "what" and "how" I plan to explain in each section and sub-section
 - 14:  Last meeting with Alasdair
-- 15-18: Do analysis of Synthetic control and robustness tests, attempt to do MASC and alternative methods
-- 20-25: Write most of the text, check for mistakes and have something solid.
+- 15-20: Do analysis of Synthetic control and robustness tests, attempt to do MASC and alternative methods
+- 21-27: Write most of the text, check for mistakes and have something solid.
 
 AGOUST
 
-- 27-01: Iteratively correct and improve text, try to do inverse synthetic control.
+- 28-01: Iteratively correct and improve text, try to do inverse synthetic control.
 - 3-6: Review, re-read, and present
 - ¿possible extension?
 
@@ -259,6 +259,14 @@ Pollution as a mediator:
 * I could report, in an Annex, **the results for GDP and productivity** even if I don't claim causality for those outputs. If they are consistent with the rest of the discourse it might be a good thing to report.
   * *He think this might be interesting, and this can show what further research is needed. Demonstrates that I am aware of the problematics and say how it would be possible to get causal effects for that (mention it in the conclusions, further research and complement with footnote and annex)*
   * I should say why I did not did it and what are the main and strong confounding factors behind that figure (many + Retrofitting plan)
+
+
+
+* Remember to THANK to 
+  * MASC and the one that send me the code, 
+  * LAURA HOSPIDO
+  * MI TUTOR + MI PRE TUTOR (sigue siendo anonimo?)
+  * Julia
 
 
 

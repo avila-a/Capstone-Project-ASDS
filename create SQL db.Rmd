@@ -379,9 +379,11 @@ unemp_n2 %>% summary()
 
 ```{r}
 dta_pollution_nuts <- read.csv("data/pollution/dta_pollution_nuts.csv") %>%
-  select(-X) %>%
+  dplyr::select(-X) %>%
   arrange(NUTS_ID) %>%
   dplyr::rename(geo = NUTS_ID, time = year)
+
+dta_pollution_nuts %>% names()
 ```
 
 Create means for NUTS2 regions too:

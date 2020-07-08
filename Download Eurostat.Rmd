@@ -8,6 +8,7 @@ Intro
 
 ```{r message=FALSE, warning=FALSE}
 library(eurostat)
+
 library(httr)
 library(jsonlite)
 library(tidyverse)

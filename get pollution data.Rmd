@@ -67,9 +67,9 @@ files <- list.files(pattern = '*35.nc', full.names = TRUE,
 rasters_pol <- stack(files)
 
 # to save them as geotiff:
-rnc <- writeRaster(rasters_pol, 
-                   filename = file.path("data/arcgis/pol") ,
-                   bylayer=TRUE, format="GTiff")
+# rnc <- writeRaster(rasters_pol, 
+#                    filename = file.path("data/arcgis/pol") ,
+#                    bylayer=TRUE, format="GTiff")
 
 rasters_pol
 
@@ -126,13 +126,13 @@ gdp_raster
 nuts.sf <- read_sf("data/nuts_sf")
 ```
 
-To get averages (population and GDP-weigthed)
+To get averages (plain, population and GDP-weigthed)
 
 ```{r}
 # Simple mean by NUTS classification of pollution:
 
-temp <- extract(rasters_pol, nuts.sf, fun=mean, sp=TRUE)
-temp
+# temp <- extract(rasters_pol, nuts.sf, fun=mean, sp=TRUE)
+# temp
 ```
 
 ```{r}
@@ -140,11 +140,16 @@ temp
 density_raster
 sum_pop_nuts <- raster('data/arcgis/sum_pop1.tif')
 # sum_pop_nuts <- extract(density_raster, nuts.sf, fun = sum, sp=TRUE)
-relative_density <- density_raster / sum_pop_nuts
 
+# Get the proportion of population in each raster
+relative_density <- density_raster / sum_pop_nuts
 relative_density <- resample(relative_density, rasters_pol)
 
+# temp <- relative_density*(1/mean(values(relative_density), na.rm = TRUE))
+
 pol_density <- rasters_pol*relative_density
+
+# temp <- pol_density*(1/mean(values(pol_density), na.rm = TRUE))
 
 # Maps to review results
 
@@ -156,11 +161,11 @@ pol_density <- rasters_pol*relative_density
 
 { # Difference of pollution and pollution(pop-weighted) raster
   plot(crop(rasters_pol, extent(1.4, 2.4, 41.2, 41.6))$PM25.1)
-  plot(crop(density_raster, extent(1.4, 2.4, 41.2, 41.6)))
+  plot(crop(relative_density, extent(1.4, 2.4, 41.2, 41.6)))
   plot(crop(pol_density, extent(1.4, 2.4, 41.2, 41.6))$layer.1)
 }
 
-# Save each year raster of pop-waighted pollution
+# Save each year raster of pop-weighted pollution
 writeRaster(pol_density, 
             filename = file.path("data/arcgis/pol_dens") ,
             bylayer=TRUE, format="GTiff")
@@ -243,7 +248,7 @@ dbf_files <- dbf_files[!duplicated(dbf_files)]
 # Divide for each one of the variables:
 dbf_dens <- dbf_files %>% stringr::str_subset( pattern = "table_pol_dens")
 dbf_gdp <- dbf_files %>% stringr::str_subset(pattern = "table_pol_gdp")
-dbf_pol <- dbf_files[1:16]
+dbf_pol <- (dbf_files %>%stringr::str_subset( pattern = "table_pol"))[1:16]
 
 # Import data and mark the year
 
@@ -267,13 +272,6 @@ dta_pol_dens <- import_multiple_dbf(dbf_dens)
 # }
 # data_pol <- data.table::rbindlist(data_pol)
 # data_pol
-
-{ # Clear differences in representations
-  plot(dta_pol$MEAN, dta_pol_dens$MEAN)
-  plot(dta_pol$MEAN[1:nrow(dta_pol_gdp)], dta_pol_gdp$MEAN)
-  plot(dta_pol_dens$MEAN[1:nrow(dta_pol_gdp)], dta_pol_gdp$MEAN)
-}
-
 ```
 
 Finalise data for PM2.5: 
@@ -294,6 +292,10 @@ dta_pollution_nuts <- dta_pol %>%
             by = c("NUTS_ID", "year")) %>%
   dplyr::rename(mean_pol_gdp = MEAN,
                 n_pol_rasters = COUNT) %>%
+  mutate(
+    mean_pol_dens = mean_pol_dens*n_pol_rasters, 
+    mean_pol_gdp = mean_pol_gdp*n_pol_rasters
+  ) %>%
   dplyr::select(NUTS_ID, year, mean_pol, mean_pol_dens, mean_pol_gdp,
                 n_pol_rasters)
 
@@ -301,6 +303,22 @@ dta_pollution_nuts <- dta_pollution_nuts %>%
   mutate(year = year + 2000)
 
 dta_pollution_nuts
+
+{ # Clear differences in representations
+  plot(dta_pol$MEAN, dta_pol_dens$MEAN)
+  # plot(dta_pol$MEAN, temp)
+  plot(dta_pol$MEAN[1:nrow(dta_pol_gdp)], dta_pol_gdp$MEAN)
+  plot(dta_pol_dens$MEAN[1:nrow(dta_pol_gdp)], dta_pol_gdp$MEAN)
+}
+
+{ # Clear differences in representations
+  plot(dta_pollution_nuts$mean_pol, 
+       dta_pollution_nuts$mean_pol_dens)
+  plot(dta_pollution_nuts$mean_pol, 
+       dta_pollution_nuts$mean_pol_gdp)
+  plot(dta_pollution_nuts$mean_pol_dens,
+       dta_pollution_nuts$mean_pol_gdp)
+}
 
 # write.csv(dta_pollution_nuts, "data/pollution/dta_pollution_nuts.csv")
 ```
