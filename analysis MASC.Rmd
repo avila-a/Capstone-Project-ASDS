@@ -68,10 +68,20 @@ balanced <- function(data, ID, TIME, VARS, required=c("all","shared")) {
 init_sc <- function(data = data, name_treat, outcome, mediator, 
                     id_col, col_time, delay = 0,
                     t_in, 
-                    announced_or_implemented = c("A", "I"),
-                    tfi2,
+                    announced_or_implemented = NA,
+                    t_fi = NA,
+                    t_fi2,
                     control_vars,
-                    restr_contr_var = "contr_restr_point"){
+                    restr_contr_var = "contr_restr_point",
+                    nuts_level = nuts_level,
+                    remove_controls = NA){
+  
+  # Restrict the sample to NUTS region and dates of interest
+  data <- data %>% as.data.frame() %>%
+    # If I use a variable that has only NUTS 2 regions
+    filter(nuts_level == nuts_level)  %>% 
+    # Optional? restrict years ro 2001-2016, the period of mediator
+    filter(time >= t_in & time <= t_fi2)
   
   # restrict the sample to a balanced panel
   data_temp <- balanced(data = data, TIME = "time", ID = "geo", 
@@ -100,14 +110,19 @@ init_sc <- function(data = data, name_treat, outcome, mediator,
   assign("col_time", str_detect(names(data_temp), col_time) %>% which(), 
          envir = .GlobalEnv)
   assign("T_in", t_in , envir = .GlobalEnv)
-  if (announced_or_implemented[1] == "A"){
+  
+  # End of treatment. Gets the date and if not calculates the implemented or announced date from announced_or_implemented
+  if(!is.na(t_fi)){
+    assign("T_fi", t_fi,  envir = .GlobalEnv)
+  } else if (announced_or_implemented[1] == "A"){
     assign("T_fi", data_temp[data_temp$geo == name_treat, "year_announced"][1], 
            envir = .GlobalEnv)
   } else {
     assign("T_fi", data_temp[data_temp$geo == name_treat, "year_stage1"][1], 
            envir = .GlobalEnv)
   }
-  assign("T_fi2", tfi2 , envir = .GlobalEnv)
+  
+  assign("T_fi2", t_fi2 , envir = .GlobalEnv)
   assign("control_vars", control_vars , envir = .GlobalEnv)
   assign("delay", delay , envir = .GlobalEnv)
   
@@ -118,7 +133,7 @@ init_sc <- function(data = data, name_treat, outcome, mediator,
     #   # contr_restr_60km == TRUE, # This can be OTHER variableS
     #   contr_restr_point == TRUE,
     # ) %>%
-    # filter(geo != "LU00") %>% # REMOVE LUXEMBOURG (ROBUSTNESS TEST)
+    filter(!(geo %in% remove_controls)) %>% 
     select(geo) %>% unique()
   
   controls <- controls$geo
@@ -178,7 +193,7 @@ init_sc <- function(data = data, name_treat, outcome, mediator,
   #    pretreat4[[length(pretreat4)+1]]<-list(M, t, "mean")
   # }
   
-  pretreat4[[length(pretreat4)+1]]<-list(M, c(2001, 2006), "mean")
+  pretreat4[[length(pretreat4)+1]]<-list(M, c(T_in, T_fi), "mean")
   
   #If other constraints are needed complete and run the following line 
   #(copying and pasting it as much as needed)
@@ -226,7 +241,7 @@ do_synth_total <- function(
   time_plot,
   t_in,
   t_fi,
-  tfi2
+  t_fi2
 ){
 #Looking for the synthetic unit for the estimation of total effect (automatic):
   prepar <- dataprep(foo = dta_imput, 
@@ -320,6 +335,7 @@ Look at a list of treated
 ```{r}
 main_dta %>%
   filter(treated_uz == TRUE) %>%
+  filter(nuts_level == 2) %>%
   select(nuts_name, geo) %>% unique()
 ```
 
@@ -362,13 +378,14 @@ control_vars_labor <- c("urb_index",
 # # DED5 -> Liepzig (!! not in dataset for missing values)
 # # DE13 -> Freiburg, tourist city. (small) INCLREASE? in pollution, reduction in unemployment
 
-data <- main_dta %>% as.data.frame() %>%
-  # If I use a variable that has only NUTS 2 regions
-  filter(nuts_level == 2)  %>% 
-  # Optional? restrict years ro 2001-2016, the period of mediator
-  filter(time >= 2001 & time <= 2016)
+# data <- main_dta %>% as.data.frame() %>%
+#   # If I use a variable that has only NUTS 2 regions
+#   filter(nuts_level == 2)  %>% 
+#   # Optional? restrict years ro 2001-2016, the period of mediator
+#   filter(time >= 2001 & time <= 2016)
 
-init_sc(data = data,
+init_sc(data = main_dta,
+        nuts_level = 2,
         name_treat = "DE30",
         outcome = "unempR_T",
         mediator = "mean_pol_gdp",
@@ -377,7 +394,8 @@ init_sc(data = data,
         col_time = "time",
         t_in = 2001, # First year of polution data,
         announced_or_implemented = "A",
-        tfi2 = 2016, # Last year of analysis
+        # t_fi
+        t_fi2 = 2016, # Last year of analysis
         control_vars = control_vars_labor,
         restr_contr_var = "contr_restr_60km") # True/false if it is valid control
 ```
@@ -401,7 +419,7 @@ output_total <- do_synth_total(
   time_plot = T_inf:T_fi2,
   t_in = T_in,
   t_fi = T_fi,
-  tfi2 = T_fi2
+  t_fi2 = T_fi2
 )
 ```
 
@@ -447,8 +465,104 @@ map_pool_1 <- leaflet() %>% addTiles() %>%
               )
 ```
 
+### Placebo treated:
 
-### Total Effect
+```{r}
+control_vars_labor <- c(
+  # "urb_index",
+  # "active_F_share",
+  "gdp_eur_hab"
+  # "wages_per_worker"
+  ) # controls
+
+list_treated <- (main_dta %>%
+  filter(treated_uz == TRUE) %>%
+  filter(nuts_level == 2) %>%
+  select(nuts_name, geo) %>% unique())$geo
+
+
+
+for (treated in list_treated){
+  
+  init_sc(data = main_dta,
+          nuts_level = 2,
+          name_treat = treated,
+          outcome = "unempR_T",
+          mediator = "mean_pol_gdp",
+          id_col = "geo",
+          # id_col_num = "num_id",
+          col_time = "time",
+          t_in = 2001, # First year of polution data,
+          # announced_or_implemented = "A",
+          t_fi = 2004,
+          t_fi2 = 2016, # Last year of analysis
+          control_vars = control_vars_labor,
+          restr_contr_var = "contr_restr_60km", # True/false if it is valid control
+          # remove_controls = c("EL62")
+  ) 
+  
+  # Change fake start date:
+  # T_fi = 2003
+  
+  output_total <- do_synth_total(
+    dta_imput = data,
+    special_predictors = pretreat4,
+    dependent = Y,
+    unit_variable = col_id_num,
+    controls_identifier = controls,
+    time_variable = col_time,
+    treatment_id = name_treat,
+    # treatment_id = data[data[,col_id]==name_treat & data[,col_time]==T_in,col_id_num],
+    unit_names_variable = col_id,
+    time_predictors_prior = c(T_inf:(T_in-delay-1), T_in:T_fi),
+    time_optimize_ssr = c(T_inf:(T_in-delay-1), T_in:T_fi),
+    time_plot = T_inf:T_fi2,
+    t_in = T_in,
+    t_fi = T_fi,
+    t_fi2 = T_fi2
+  )
+  
+  # Total:
+  data.frame(Y1 = output_total$Y1,
+             Y_synth = output_total$Y_synth%*%output_total$synth.result$solution.w,
+             year = T_in:T_fi2) %>%
+    pivot_longer(cols = c("Y1", "w.weight")) %>%
+    ggplot() +
+    geom_line(aes(x = year, y = value, colour = name)) +
+    geom_vline(xintercept = T_fi) +
+    geom_vline(xintercept = (main_dta %>%
+                     filter(geo == treated))$year_stage1[1])
+    labs(
+      title = treated
+    )
+  
+  output_total$synth.tables
+}
+
+
+# map:
+weights_1 <- output_total$synth.tables[3] %>% as.data.frame() %>%
+  arrange(desc(tab.w.w.weights)) 
+
+donor_pool_1 <- nuts_treated %>% 
+  left_join(weights_1, by = c("NUTS_ID" = "tab.w.unit.names")) %>%
+  select(NUTS_ID, NUTS_NAME, tab.w.w.weights) %>%
+  filter(tab.w.w.weights > 0.001) %>%
+  arrange(desc(tab.w.w.weights)); donor_pool_1 %>% as.data.frame()
+
+map_pool_1 <- leaflet() %>% addTiles() %>%
+  addPolygons(data = donor_pool_1, weight = 0.5, color = "black",
+              fillColor = ~colorQuantile("RdYlGn",
+                      donor_pool_1$tab.w.w.weights)(donor_pool_1$tab.w.w.weights),
+              popup = paste0(
+                "<b>", donor_pool_1$NUTS_ID, "</b> <br/>",
+                "<b> Weight </b>", donor_pool_1$tab.w.w.weights, "<br/>")
+              )
+map_pool_1
+```
+
+
+### Total Effect (before)
 
 ```{r}
 #Looking for the synthetic unit for the estimation of total effect (automatic):
@@ -614,6 +728,7 @@ sintetico6 <-synth(data.prep.obj = prepar6,
   j<-j+1
 }
 
+# Added by Antonio
 synth.tables6 <- synth.tab(
                           dataprep.res = prepar6,
                           synth.res = sintetico6
@@ -626,7 +741,7 @@ potenz1[rownames(potenz1)>=T_in & rownames(potenz1)<=T_fi]<-potenz1temp[rownames
 potenz2[rownames(potenz2)>=T_in & rownames(potenz2)<=T_fi]<-potenz2temp[rownames(potenz2temp)>=T_in & rownames(potenz2temp)<=T_fi]
 
 #Store the results on direct effect and corresponding pre and post treatment RMSPE (automatic)
-dir1<-potenz1-potenz2
+dir1 <- potenz1-potenz2
 PRE_RMSPE_dir1<-mean(dir1[1:(length(T_in:T_fi))]^2)
 POST_RMSPE_dir1<-dir1[(length(T_in:T_fi)+1):length(T_in:T_fi2)]
 
