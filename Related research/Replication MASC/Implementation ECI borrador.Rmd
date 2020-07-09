@@ -291,6 +291,9 @@ tot1<-potenz1-potenz2
 PRE_RMSPE_tot1<-mean(tot1[1:(length(T_in:T_fi))]^2)
 POST_RMSPE_tot1<-tot1[(length(T_in:T_fi)+1):length(T_in:T_fi2)]
 
+print("Post/pre RMSPE")
+mean(POST_RMSPE_tot1)/PRE_RMSPE_tot1
+
 #Select the values for the graph of the mediator when the total effect is calculated (automatic)
 M1<-data[which(data[,ncol(data)]==1 & data[,col_time]>=(T_in-delay) & data[,col_time]<=(T_fi2-delay)), M]
 M_synth<-c()

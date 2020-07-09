@@ -18,6 +18,7 @@ library(Synth)
 library(limSolve)
 library(dplyr)
 library(stringr)
+library(leaflet)
 ```
 
 
@@ -25,6 +26,8 @@ Get data:
 
 ```{r}
 main_dta <- readRDS("data/main_dta.rds")
+nuts_treated <- readRDS("data/nuts_sf_treated") %>%
+  sf::st_as_sf()
 ```
 
 Restrict dataset so it becomes ballanced:
@@ -59,6 +62,7 @@ balanced <- function(data, ID, TIME, VARS, required=c("all","shared")) {
 }
 ```
 
+#### F to prepare SC
 
 ```{r}
 init_sc <- function(data = data, name_treat, outcome, mediator, 
@@ -66,7 +70,8 @@ init_sc <- function(data = data, name_treat, outcome, mediator,
                     t_in, 
                     announced_or_implemented = c("A", "I"),
                     tfi2,
-                    control_vars){
+                    control_vars,
+                    restr_contr_var = "contr_restr_point"){
   
   # restrict the sample to a balanced panel
   data_temp <- balanced(data = data, TIME = "time", ID = "geo", 
@@ -107,13 +112,15 @@ init_sc <- function(data = data, name_treat, outcome, mediator,
   assign("delay", delay , envir = .GlobalEnv)
   
   # Create a list of controls
-  controls <- data_temp %>%
-    filter(
-      # contr_restr_60km == TRUE, # This can be OTHER variableS
-      contr_restr_point == TRUE,
-    ) %>%
+  controls <- data_temp[data_temp[, restr_contr_var] == TRUE, ]
+  controls <- controls %>%
+    # filter(
+    #   # contr_restr_60km == TRUE, # This can be OTHER variableS
+    #   contr_restr_point == TRUE,
+    # ) %>%
     # filter(geo != "LU00") %>% # REMOVE LUXEMBOURG (ROBUSTNESS TEST)
     select(geo) %>% unique()
+  
   controls <- controls$geo
   
   # Restrict data to treated and set of controls
@@ -156,6 +163,7 @@ init_sc <- function(data = data, name_treat, outcome, mediator,
   # T_inf <- T_in
   
   assign("T_inf", T_inf , envir = .GlobalEnv)      # !!!
+  
   assign("data", data_temp , envir = .GlobalEnv)      # !!!
   
   #Create all the required constraints (automatic) the constraints on all pre-treatment outcome until one year before intervention and pre-treatment mediator until two years before intervention)
@@ -201,10 +209,107 @@ init_sc <- function(data = data, name_treat, outcome, mediator,
 }
 ```
 
-Function to perform SC
+#### F to do SC Total
 
 ```{r}
-
+do_synth_total <- function(
+  dta_imput,
+  special_predictors,
+  dependent,
+  unit_variable,
+  controls_identifier,
+  time_variable,
+  treatment_id,
+  unit_names_variable,
+  time_predictors_prior,
+  time_optimize_ssr,
+  time_plot,
+  t_in,
+  t_fi,
+  tfi2
+){
+#Looking for the synthetic unit for the estimation of total effect (automatic):
+  prepar <- dataprep(foo = dta_imput, 
+                     special.predictors = special_predictors, 
+                     dependent = dependent,
+                     unit.variable = unit_variable, 
+                     controls.identifier = controls_identifier, 
+                     time.variable = time_variable, 
+                     treatment.identifier = treatment_id,
+                     unit.names.variable = unit_names_variable,
+                     # Ant: was c(T_inf:(T_in-delay-1), T_in:T_fi) for BOTH
+                     time.predictors.prior = time_predictors_prior, # c(T_in:T_fi),
+                     time.optimize.ssr = time_optimize_ssr, #c(T_in:T_fi),
+                     time.plot = time_plot
+  )
+  
+  synth_result <- synth(data.prep.obj = prepar)
+  
+  # Do MASC-Specific stuff:
+  Y1 <- dta_imput[which(dta_imput[,ncol(dta_imput)]==1 &
+                          dta_imput[,col_time]>=T_in &
+                     dta_imput[,col_time]<=T_fi2), Y]
+  M1 <- dta_imput[which(dta_imput[,ncol(dta_imput)]==1 &
+                          dta_imput[,col_time]>=T_in &
+                     dta_imput[,col_time]<=T_fi2), M]
+  
+  Y_synth <- c()
+  for (u in controls){
+    Y_synth<-cbind(
+      Y_synth, 
+      matrix(dta_imput[which(
+        dta_imput[,col_id_num]==u & 
+          dta_imput[,col_time]>=T_in &
+          dta_imput[,col_time]<=T_fi2), Y], ncol=1))
+  }
+  M_synth <- c()
+  for (u in controls){
+    M_synth<-cbind(
+      M_synth, 
+      matrix(dta_imput[which(
+        dta_imput[,col_id_num]==u & 
+          dta_imput[,col_time]>=T_in &
+          dta_imput[,col_time]<=T_fi2), M], ncol=1))
+  }
+  
+  #Store the results on total effect and pre and post treatment RMSPE (automatic)
+  potenz1_Y <- Y1
+  potenz2_Y <- Y_synth%*%synth_result$solution.w
+  tot1_Y <- potenz1_Y - potenz2_Y
+  PRE_RMSPE_Y <-mean(tot1_Y[1:(length(T_in:T_fi))]^2)
+  POST_RMSPE_Y <- mean(tot1_Y[(length(T_in:T_fi)+1):length(T_in:T_fi2)]^2)
+  # POST_RMSPE_tot1<-tot1[(length(T_in:T_fi)+1):length(T_in:T_fi2)]
+  # !!!!!! this POST_RMSPE has no ^2 in the version of Alessandra!!
+  
+  potenz1_M <- M1
+  potenz2_M <- M_synth%*%synth_result$solution.w
+  tot1_M <- potenz1_M - potenz2_M
+  PRE_RMSPE_M <-mean(tot1_M[1:(length(T_in:T_fi))]^2)
+  POST_RMSPE_M <- mean(tot1_M[(length(T_in:T_fi)+1):length(T_in:T_fi2)]^2)
+  
+  print(paste0("Post/pre RMSPE (Y): ", POST_RMSPE_Y/PRE_RMSPE_Y))
+  print(paste0("Post/pre RMSPE (M): ", POST_RMSPE_M/PRE_RMSPE_M))
+  
+  # Save results
+  
+  output <- list()
+    # results
+  output$synth.result <- synth_result
+  output$path.plot <- path.plot(dataprep.res = prepar, 
+                                synth.res = synth_result)
+  output$synth.tables <- synth.tab(
+    dataprep.res = prepar,
+    synth.res = synth_result
+  ) ; output$synth.tables
+    # MASC-speciphic
+  output$Y1 <- Y1
+  output$Y_synth <- Y_synth
+  
+  output$M1 <- M1
+  output$M_synth <- M_synth
+  
+  return(output)
+}
 ```
 
 
@@ -213,7 +318,7 @@ Function to perform SC
 Look at a list of treated
 
 ```{r}
-data %>%
+main_dta %>%
   filter(treated_uz == TRUE) %>%
   select(nuts_name, geo) %>% unique()
 ```
@@ -272,24 +377,88 @@ init_sc(data = data,
         col_time = "time",
         t_in = 2001, # First year of polution data,
         announced_or_implemented = "A",
-        tfi2 = 2016,
-        control_vars = control_vars_labor)
+        tfi2 = 2016, # Last year of analysis
+        control_vars = control_vars_labor,
+        restr_contr_var = "contr_restr_60km") # True/false if it is valid control
 ```
 
-Delete all geos that have missing values on the variables of interest:
+
+Total effect (function)
+
+```{r}
+output_total <- do_synth_total(
+  dta_imput = data,
+  special_predictors = pretreat4,
+  dependent = Y,
+  unit_variable = col_id_num,
+  controls_identifier = controls,
+  time_variable = col_time,
+  treatment_id = name_treat,
+  # treatment_id = data[data[,col_id]==name_treat & data[,col_time]==T_in,col_id_num],
+  unit_names_variable = col_id,
+  time_predictors_prior = c(T_inf:(T_in-delay-1), T_in:T_fi),
+  time_optimize_ssr = c(T_inf:(T_in-delay-1), T_in:T_fi),
+  time_plot = T_inf:T_fi2,
+  t_in = T_in,
+  t_fi = T_fi,
+  tfi2 = T_fi2
+)
+```
+
+Plots and results of Total synth:
+
+```{r}
+# Total:
+data.frame(Y1 = output_total$Y1,
+           Y_synth = output_total$Y_synth%*%output_total$synth.result$solution.w,
+           year = T_in:T_fi2) %>%
+  pivot_longer(cols = c("Y1", "w.weight")) %>%
+ggplot() +
+  geom_line(aes(x = year, y = value, colour = name)) +
+  geom_vline(xintercept = T_fi)
+
+
+# Mediator:
+data.frame(M1 = output_total$M1,
+           M_synth = output_total$M_synth%*%output_total$synth.result$solution.w,
+           year = T_in:T_fi2) %>%
+  pivot_longer(cols = c("M1", "w.weight")) %>%
+ggplot() +
+  geom_line(aes(x = year, y = value, colour = name)) +
+  geom_vline(xintercept = T_fi)
+
+# map:
+weights_1 <- output_total$synth.tables[3] %>% as.data.frame() %>%
+  arrange(desc(tab.w.w.weights)) 
+
+donor_pool_1 <- nuts_treated %>% 
+  left_join(weights_1, by = c("NUTS_ID" = "tab.w.unit.names")) %>%
+  select(NUTS_ID, NUTS_NAME, tab.w.w.weights) %>%
+  filter(tab.w.w.weights > 0.001) %>%
+  arrange(desc(tab.w.w.weights)); donor_pool_1 %>% as.data.frame()
+
+map_pool_1 <- leaflet() %>% addTiles() %>%
+  addPolygons(data = donor_pool_1, weight = 0.5, color = "black",
+              fillColor = ~colorQuantile("RdYlGn",
+                      donor_pool_1$tab.w.w.weights)(donor_pool_1$tab.w.w.weights),
+              popup = paste0(
+                "<b>", donor_pool_1$NUTS_ID, "</b> <br/>",
+                "<b> Weight </b>", donor_pool_1$tab.w.w.weights, "<br/>")
+              )
+```
 
 
 ### Total Effect
 
 ```{r}
 #Looking for the synthetic unit for the estimation of total effect (automatic):
-prepar <- dataprep(data, 
+prepar <- dataprep(foo = data, 
                  special.predictors = pretreat4, 
                  dependent=Y,
                  unit.variable = col_id_num, 
                  controls.identifier = controls, 
                  time.variable = col_time, 
-                 treatment.identifier =data[data[,col_id]==name_treat & data[,col_time]==T_in,col_id_num],
+                 treatment.identifier = data[data[,col_id]==name_treat & data[,col_time]==T_in,col_id_num],
                  unit.names.variable = "geo",
           # Ant: was c(T_inf:(T_in-delay-1), T_in:T_fi) for BOTH
                  time.predictors.prior = c(T_inf:(T_in-delay-1), T_in:T_fi), # c(T_in:T_fi),
@@ -323,7 +492,7 @@ for (u in controls){
   
   # ! removed ", add=TRUE" from lines (Antonio)
   lines(T_in:T_fi2, M_synth%*%sintetico4$solution.w, col="red") 
-  abline(v=(T_fi+1), lty=3)
+  abline(v=(T_fi), lty=3) # removed +1 (the effect is in the same year for me)
 }
 
 # Added by Antonio
@@ -335,8 +504,24 @@ synth.tables <- synth.tab(
                           synth.res = sintetico4
                           )
 synth.tables[1:2]
-synth.tables[3] %>% as.data.frame() %>%
+weights_1 <- synth.tables[3] %>% as.data.frame() %>%
   arrange(desc(tab.w.w.weights))
+
+donor_pool_1 <- nuts_treated %>% 
+  left_join(weights_1, by = c("NUTS_ID" = "tab.w.unit.names")) %>%
+  select(NUTS_ID, NUTS_NAME, tab.w.w.weights) %>%
+  filter(tab.w.w.weights > 0.001) %>%
+  arrange(desc(tab.w.w.weights)); donor_pool_1 %>% as.data.frame()
+
+map_pool_1 <- leaflet() %>% addTiles() %>%
+  addPolygons(data = donor_pool_1, weight = 0.5, color = "black",
+              fillColor = ~colorQuantile("RdYlGn",
+                      donor_pool_1$tab.w.w.weights)(donor_pool_1$tab.w.w.weights),
+              popup = paste0(
+                "<b>", donor_pool_1$NUTS_ID, "</b> <br/>",
+                "<b> Weight </b>", donor_pool_1$tab.w.w.weights, "<br/>")
+              )
+# map_pool_1
 
 #Store the results on total effect and pre and post treatment RMSPE (automatic)
 potenz1<-M1
@@ -344,6 +529,9 @@ potenz2<-M_synth%*%sintetico4$solution.w
 tot1<-potenz1-potenz2
 PRE_RMSPE_tot1<-mean(tot1[1:(length(T_in:T_fi))]^2)
 POST_RMSPE_tot1<-tot1[(length(T_in:T_fi)+1):length(T_in:T_fi2)]
+
+print(paste0("Post/pre RMSPE: ", mean(POST_RMSPE_tot1)/PRE_RMSPE_tot1))
+
 
 #Select the values for the graph of the mediator when the total effect is calculated (automatic)
 M1<-data[which(data[,ncol(data)]==1 & data[,col_time]>=(T_in-delay) & data[,col_time]<=(T_fi2-delay)), M]
@@ -361,7 +549,7 @@ for (u in controls){
        sub="Observed M(1) and Synthetic M(0)")
   # !! Antonio: removed "add=TRUE"
   lines(T_in:T_fi2, M_synth%*%sintetico4$solution.w, col="red")
-  abline(v=(T_fi+1), lty=3)
+  abline(v=(T_fi), lty=3) # removed +1 (the effect is in the same year for me)
 }
 
 

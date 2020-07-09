@@ -896,6 +896,8 @@ nuts.sf.treated %>%
 # nuts.sf.treated <- readRDS("data/nuts_sf_treated")
 ```
 
+## Maps of T and C !
+
 ```{r}
 temp_treated <- nuts.sf.treated %>%
   filter(treated_any == TRUE,
