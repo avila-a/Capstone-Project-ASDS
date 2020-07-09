@@ -19,6 +19,8 @@ library(limSolve)
 library(dplyr)
 library(stringr)
 library(leaflet)
+library(tidyr)
+library(ggplot2)
 ```
 
 
@@ -74,7 +76,8 @@ init_sc <- function(data = data, name_treat, outcome, mediator,
                     control_vars,
                     restr_contr_var = "contr_restr_point",
                     nuts_level = nuts_level,
-                    remove_controls = NA){
+                    remove_controls = NA,
+                    remove_countries = NA){
   
   # Restrict the sample to NUTS region and dates of interest
   data <- data %>% as.data.frame() %>%
@@ -133,6 +136,7 @@ init_sc <- function(data = data, name_treat, outcome, mediator,
     #   # contr_restr_60km == TRUE, # This can be OTHER variableS
     #   contr_restr_point == TRUE,
     # ) %>%
+    filter(!(country %in% remove_countries)) %>%
     filter(!(geo %in% remove_controls)) %>% 
     select(geo) %>% unique()
   
@@ -258,7 +262,8 @@ do_synth_total <- function(
                      time.plot = time_plot
   )
   
-  synth_result <- synth(data.prep.obj = prepar)
+  synth_result <- synth(data.prep.obj = prepar,
+                        Margin.ipop=.005,Sigf.ipop=7,Bound.ipop=6)
   
   # Do MASC-Specific stuff:
   Y1 <- dta_imput[which(dta_imput[,ncol(dta_imput)]==1 &
@@ -346,7 +351,7 @@ main_dta %>%
 
 ## Calculation of total, direct and Indirect effects.
 
-#### Load the database: 
+Load the database: 
 
 * the name has to be "data"
 * it has to have a column of id, 
@@ -452,7 +457,7 @@ weights_1 <- output_total$synth.tables[3] %>% as.data.frame() %>%
 donor_pool_1 <- nuts_treated %>% 
   left_join(weights_1, by = c("NUTS_ID" = "tab.w.unit.names")) %>%
   select(NUTS_ID, NUTS_NAME, tab.w.w.weights) %>%
-  filter(tab.w.w.weights > 0.001) %>%
+  filter(tab.w.w.weights >= 0.001) %>%
   arrange(desc(tab.w.w.weights)); donor_pool_1 %>% as.data.frame()
 
 map_pool_1 <- leaflet() %>% addTiles() %>%
@@ -471,18 +476,27 @@ map_pool_1 <- leaflet() %>% addTiles() %>%
 control_vars_labor <- c(
   # "urb_index",
   # "active_F_share",
-  "gdp_eur_hab"
-  # "wages_per_worker"
+  "gdp_eur_hab",
+  "wages_per_worker"
   ) # controls
 
-list_treated <- (main_dta %>%
+countries_to_remove <- c("ES", "EL", "PT")
+# https://data.worldbank.org/indicator/SL.UEM.TOTL.NE.ZS?locations=DE-ES-GR-PL-NL-PT-LU-CZ-HU
+
+
+list_treated <- main_dta %>%
   filter(treated_uz == TRUE) %>%
-  filter(nuts_level == 2) %>%
-  select(nuts_name, geo) %>% unique())$geo
+  filter(nuts_level == 2,
+         year_stage1 <= 2016,
+         !(geo %in% c("DEB3", "DED5"))) %>%
+  select(nuts_name, geo, year_stage1, year_announced) %>% 
+  unique() ; list_treated
 
-
+list_treated <- list_treated$geo
 
 for (treated in list_treated){
+  
+  print(paste0("init ", treated))
   
   init_sc(data = main_dta,
           nuts_level = 2,
@@ -494,15 +508,13 @@ for (treated in list_treated){
           col_time = "time",
           t_in = 2001, # First year of polution data,
           # announced_or_implemented = "A",
-          t_fi = 2004,
+          t_fi = 2005,
           t_fi2 = 2016, # Last year of analysis
           control_vars = control_vars_labor,
-          restr_contr_var = "contr_restr_60km", # True/false if it is valid control
+          restr_contr_var = "contr_restr_point", # True/false if it is valid control
+          remove_countries = countries_to_remove
           # remove_controls = c("EL62")
   ) 
-  
-  # Change fake start date:
-  # T_fi = 2003
   
   output_total <- do_synth_total(
     dta_imput = data,
@@ -522,27 +534,68 @@ for (treated in list_treated){
     t_fi2 = T_fi2
   )
   
+  print(paste0("Synth things ", treated))
+  
+  output_total$path.plot
+  
+  print(output_total$synth.tables$tab.pred %>% as.data.frame())
+  print(output_total$synth.tables$tab.w %>% as.data.frame() %>%
+          arrange(desc(w.weights)))
+  
+  print(paste0("graph ", treated))
+  
   # Total:
-  data.frame(Y1 = output_total$Y1,
+  plot_treated <- data.frame(Y1 = output_total$Y1,
              Y_synth = output_total$Y_synth%*%output_total$synth.result$solution.w,
              year = T_in:T_fi2) %>%
     pivot_longer(cols = c("Y1", "w.weight")) %>%
     ggplot() +
     geom_line(aes(x = year, y = value, colour = name)) +
     geom_vline(xintercept = T_fi) +
-    geom_vline(xintercept = (main_dta %>%
-                     filter(geo == treated))$year_stage1[1])
+    geom_vline(xintercept = 
+                 (main_dta %>%
+                    filter(geo == treated))$year_stage1[1]) +
+    # geom_vline(xintercept = NA) +
+                 # (main_dta %>%
+                 #    filter(geo == treated))$year_stage1[1]) +
     labs(
-      title = treated
+      title = paste0(treated, " ", (main_dta %>% filter(geo == treated))$year_announced[1])
+                     
     )
+  print(plot_treated)
+  print("should have worked")
   
-  output_total$synth.tables
+  # Mediator:
+  plot_mediator <- data.frame(M1 = output_total$M1,
+             M_synth = output_total$M_synth%*%output_total$synth.result$solution.w,
+             year = T_in:T_fi2) %>%
+    pivot_longer(cols = c("M1", "w.weight")) %>%
+    ggplot() +
+    geom_line(aes(x = year, y = value, colour = name)) +
+    geom_vline(xintercept = T_fi) +
+    geom_vline(xintercept = 
+                 (main_dta %>%
+                    filter(geo == treated))$year_stage1[1])
+  
+  print(plot_mediator)
 }
+```
+
+```{r}
+list_treated <- main_dta %>%
+  filter(treated_uz == TRUE) %>%
+  filter(nuts_level == 2,
+         year_stage1 <= 2016,
+         !(geo %in% c("DEB3", "DED5"))) %>%
+  select(LEZ, geo, year_stage1, year_announced) %>% unique() ; list_treated
+```
 
 
+
+```{r}
 # map:
 weights_1 <- output_total$synth.tables[3] %>% as.data.frame() %>%
-  arrange(desc(tab.w.w.weights)) 
+  arrange(desc(tab.w.w.weights)))
 
 donor_pool_1 <- nuts_treated %>% 
   left_join(weights_1, by = c("NUTS_ID" = "tab.w.unit.names")) %>%
