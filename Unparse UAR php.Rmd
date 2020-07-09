@@ -457,8 +457,8 @@ umweltzonen %>% as.data.frame() %>%
 No, I should keep them all.
 
 ```{r}
-# saveRDS(umweltzonen, "data/umweltbundesamt/umweltonen.rds")
-# umweltzonen <- readRDS("data/umweltbundesamt/umweltonen.rds")
+# saveRDS(umweltzonen, "data/umweltbundesamt/umweltzonen.rds")
+# umweltzonen <- readRDS("data/umweltbundesamt/umweltzonen.rds")
 ```
 
 ### Create multiple sets of controls: 
@@ -882,7 +882,7 @@ nuts.sf.treated %>% head()
 ```{r}
 nuts.sf.treated %>%
   # filter(str_detect(NUTS_NAME, "Freiburg")) %>%
-  filter(NUTS_ID == "DEC0")
+  filter(NUTS_ID == "DEA3")
 ```
 
 

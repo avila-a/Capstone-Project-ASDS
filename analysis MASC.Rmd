@@ -32,7 +32,7 @@ nuts_treated <- readRDS("data/nuts_sf_treated") %>%
   sf::st_as_sf()
 ```
 
-Restrict dataset so it becomes ballanced:
+Restrict dataset so it becomes balanced:
 
 ```{r}
 # code from https://stackoverflow.com/a/25672453/12422706
@@ -341,7 +341,7 @@ Look at a list of treated
 main_dta %>%
   filter(treated_uz == TRUE) %>%
   filter(nuts_level == 2) %>%
-  select(nuts_name, geo) %>% unique()
+  select(nuts_name, LEZ, geo) %>% unique()
 ```
 
 ## Prepare for Synth
@@ -489,7 +489,7 @@ list_treated <- main_dta %>%
   filter(nuts_level == 2,
          year_stage1 <= 2016,
          !(geo %in% c("DEB3", "DED5"))) %>%
-  select(nuts_name, geo, year_stage1, year_announced) %>% 
+  select(LEZ, geo, year_stage1, year_announced) %>% 
   unique() ; list_treated
 
 list_treated <- list_treated$geo
@@ -542,7 +542,7 @@ for (treated in list_treated){
   print(output_total$synth.tables$tab.w %>% as.data.frame() %>%
           arrange(desc(w.weights)))
   
-  print(paste0("graph ", treated))
+  # print(paste0("graph ", treated))
   
   # Total:
   plot_treated <- data.frame(Y1 = output_total$Y1,
@@ -563,7 +563,7 @@ for (treated in list_treated){
                      
     )
   print(plot_treated)
-  print("should have worked")
+  # print("should have worked")
   
   # Mediator:
   plot_mediator <- data.frame(M1 = output_total$M1,
@@ -849,4 +849,338 @@ legend(T_fi2-2, max(tot1, dir1, ind1)+max(sd(tot1), sd(dir1), sd(ind1)),
 abline(h=0)
 ```
 
+### Placebo treated:
 
+```{r}
+control_vars_labor <- c(
+  # "urb_index",
+  # "active_F_share",
+  "gdp_eur_hab",
+  "wages_per_worker"
+  ) # controls
+
+countries_to_remove <- c("ES", "EL", "PT")
+# https://data.worldbank.org/indicator/SL.UEM.TOTL.NE.ZS?locations=DE-ES-GR-PL-NL-PT-LU-CZ-HU
+
+
+list_treated <- main_dta %>%
+  filter(treated_uz == TRUE) %>%
+  filter(nuts_level == 2,
+         year_stage1 <= 2016,
+         !(geo %in% c("DEB3", "DED5"))) %>%
+  select(LEZ, geo, year_stage1, year_announced) %>% 
+  unique() ; list_treated
+
+list_treated <- list_treated$geo
+
+for (treated in list_treated){
+  
+  print(paste0("init ", treated))
+  
+  init_sc(data = main_dta,
+          nuts_level = 2,
+          name_treat = treated,
+          outcome = "unempR_T",
+          mediator = "mean_pol_gdp",
+          id_col = "geo",
+          # id_col_num = "num_id",
+          col_time = "time",
+          t_in = 2001, # First year of polution data,
+          # announced_or_implemented = "A",
+          t_fi = 2005,
+          t_fi2 = 2016, # Last year of analysis
+          control_vars = control_vars_labor,
+          restr_contr_var = "contr_restr_point", # True/false if it is valid control
+          remove_countries = countries_to_remove
+          # remove_controls = c("EL62")
+  ) 
+  
+  output_total <- do_synth_total(
+    dta_imput = data,
+    special_predictors = pretreat4,
+    dependent = Y,
+    unit_variable = col_id_num,
+    controls_identifier = controls,
+    time_variable = col_time,
+    treatment_id = name_treat,
+    # treatment_id = data[data[,col_id]==name_treat & data[,col_time]==T_in,col_id_num],
+    unit_names_variable = col_id,
+    time_predictors_prior = c(T_inf:(T_in-delay-1), T_in:T_fi),
+    time_optimize_ssr = c(T_inf:(T_in-delay-1), T_in:T_fi),
+    time_plot = T_inf:T_fi2,
+    t_in = T_in,
+    t_fi = T_fi,
+    t_fi2 = T_fi2
+  )
+  
+  print(paste0("Synth things ", treated))
+  
+  output_total$path.plot
+  
+  print(output_total$synth.tables$tab.pred %>% as.data.frame())
+  print(output_total$synth.tables$tab.w %>% as.data.frame() %>%
+          arrange(desc(w.weights)))
+  
+  # print(paste0("graph ", treated))
+  
+  # Total:
+  plot_treated <- data.frame(Y1 = output_total$Y1,
+             Y_synth = output_total$Y_synth%*%output_total$synth.result$solution.w,
+             year = T_in:T_fi2) %>%
+    pivot_longer(cols = c("Y1", "w.weight")) %>%
+    ggplot() +
+    geom_line(aes(x = year, y = value, colour = name)) +
+    geom_vline(xintercept = T_fi) +
+    geom_vline(xintercept = 
+                 (main_dta %>%
+                    filter(geo == treated))$year_stage1[1]) +
+    # geom_vline(xintercept = NA) +
+                 # (main_dta %>%
+                 #    filter(geo == treated))$year_stage1[1]) +
+    labs(
+      title = paste0(treated, " ", (main_dta %>% filter(geo == treated))$year_announced[1])
+                     
+    )
+  print(plot_treated)
+  # print("should have worked")
+  
+  # Mediator:
+  plot_mediator <- data.frame(M1 = output_total$M1,
+             M_synth = output_total$M_synth%*%output_total$synth.result$solution.w,
+             year = T_in:T_fi2) %>%
+    pivot_longer(cols = c("M1", "w.weight")) %>%
+    ggplot() +
+    geom_line(aes(x = year, y = value, colour = name)) +
+    geom_vline(xintercept = T_fi) +
+    geom_vline(xintercept = 
+                 (main_dta %>%
+                    filter(geo == treated))$year_stage1[1])
+  
+  print(plot_mediator)
+}
+```
+
+
+### Real treated T (main effect):
+
+```{r}
+control_vars_labor <- c(
+  # "urb_index",
+  # "active_F_share",
+  "gdp_eur_hab",
+  "wages_per_worker"
+  ) # controls
+
+countries_to_remove <- c("ES", "EL", "PT")
+# https://data.worldbank.org/indicator/SL.UEM.TOTL.NE.ZS?locations=DE-ES-GR-PL-NL-PT-LU-CZ-HU
+
+
+# list_treated <- main_dta %>%
+#   filter(treated_uz == TRUE) %>%
+#   filter(nuts_level == 2,
+#          year_stage1 <= 2016,
+#          # !(geo %in% c("DEB3", "DED5"))
+#          ) %>%
+#   select(LEZ, geo, year_stage1, year_announced) %>% 
+#   unique() ; list_treated
+# 
+# list_treated <- list_treated$geo
+
+for (treated in c("DE94", "DEA3", "DE92", "DE30", "DE50")){
+  
+  print(paste0("init ", treated))
+  
+  init_sc(data = main_dta,
+          nuts_level = 2,
+          name_treat = treated,
+          outcome = "unempR_T",
+          mediator = "mean_pol_gdp",
+          id_col = "geo",
+          # id_col_num = "num_id",
+          col_time = "time",
+          t_in = 2001, # First year of polution data,
+          announced_or_implemented = "A", # REAL TREATMENT
+          # t_fi = 2005,
+          t_fi2 = 2016, # Last year of analysis
+          control_vars = control_vars_labor,
+          restr_contr_var = "contr_restr_point", # True/false if it is valid control
+          remove_countries = countries_to_remove
+          # remove_controls = c("EL62")
+  ) 
+  
+  output_total <- do_synth_total(
+    dta_imput = data,
+    special_predictors = pretreat4,
+    dependent = Y,
+    unit_variable = col_id_num,
+    controls_identifier = controls,
+    time_variable = col_time,
+    treatment_id = name_treat,
+    # treatment_id = data[data[,col_id]==name_treat & data[,col_time]==T_in,col_id_num],
+    unit_names_variable = col_id,
+    time_predictors_prior = c(T_inf:(T_in-delay-1), T_in:T_fi),
+    time_optimize_ssr = c(T_inf:(T_in-delay-1), T_in:T_fi),
+    time_plot = T_inf:T_fi2,
+    t_in = T_in,
+    t_fi = T_fi,
+    t_fi2 = T_fi2
+  )
+  
+  print(paste0("Synth things ", treated))
+  
+  output_total$path.plot
+  
+  print(output_total$synth.tables$tab.pred %>% as.data.frame())
+  print(output_total$synth.tables$tab.w %>% as.data.frame() %>%
+          arrange(desc(w.weights)))
+  
+  # print(paste0("graph ", treated))
+  
+  # Total:
+  plot_treated <- data.frame(Y1 = output_total$Y1,
+             Y_synth = output_total$Y_synth%*%output_total$synth.result$solution.w,
+             year = T_in:T_fi2) %>%
+    pivot_longer(cols = c("Y1", "w.weight")) %>%
+    ggplot() +
+    geom_line(aes(x = year, y = value, colour = name)) +
+    geom_vline(xintercept = T_fi) +
+    geom_vline(xintercept = 
+                 (main_dta %>%
+                    filter(geo == treated))$year_stage1[1]) +
+    # geom_vline(xintercept = NA) +
+                 # (main_dta %>%
+                 #    filter(geo == treated))$year_stage1[1]) +
+    labs(
+      title = paste0(treated, " ", (main_dta %>% filter(geo == treated))$year_announced[1])
+                     
+    )
+  print(plot_treated)
+  # print("should have worked")
+  
+  # Mediator:
+  plot_mediator <- data.frame(M1 = output_total$M1,
+             M_synth = output_total$M_synth%*%output_total$synth.result$solution.w,
+             year = T_in:T_fi2) %>%
+    pivot_longer(cols = c("M1", "w.weight")) %>%
+    ggplot() +
+    geom_line(aes(x = year, y = value, colour = name)) +
+    geom_vline(xintercept = T_fi) +
+    geom_vline(xintercept = 
+                 (main_dta %>%
+                    filter(geo == treated))$year_stage1[1])
+  
+  print(plot_mediator)
+}
+```
+
+### Real treated F (main effect - Female unemployment):
+
+```{r}
+control_vars_labor <- c(
+  # "urb_index",
+  # "active_F_share",
+  "gdp_eur_hab",
+  "wages_per_worker"
+  ) # controls
+
+countries_to_remove <- c("ES", "EL", "PT")
+# https://data.worldbank.org/indicator/SL.UEM.TOTL.NE.ZS?locations=DE-ES-GR-PL-NL-PT-LU-CZ-HU
+
+
+# list_treated <- main_dta %>%
+#   filter(treated_uz == TRUE) %>%
+#   filter(nuts_level == 2,
+#          year_stage1 <= 2016,
+#          # !(geo %in% c("DEB3", "DED5"))
+#          ) %>%
+#   select(LEZ, geo, year_stage1, year_announced) %>% 
+#   unique() ; list_treated
+# 
+# list_treated <- list_treated$geo
+
+for (treated in c("DE94", "DEA3", "DE92", "DE30", "DE50")){
+  
+  print(paste0("init ", treated))
+  
+  init_sc(data = main_dta,
+          nuts_level = 2,
+          name_treat = treated,
+          outcome = "unempR_F",
+          mediator = "mean_pol_gdp",
+          id_col = "geo",
+          # id_col_num = "num_id",
+          col_time = "time",
+          t_in = 2001, # First year of polution data,
+          announced_or_implemented = "A", # REAL TREATMENT
+          # t_fi = 2005,
+          t_fi2 = 2016, # Last year of analysis
+          control_vars = control_vars_labor,
+          restr_contr_var = "contr_restr_point", # True/false if it is valid control
+          remove_countries = countries_to_remove
+          # remove_controls = c("EL62")
+  ) 
+  
+  output_total <- do_synth_total(
+    dta_imput = data,
+    special_predictors = pretreat4,
+    dependent = Y,
+    unit_variable = col_id_num,
+    controls_identifier = controls,
+    time_variable = col_time,
+    treatment_id = name_treat,
+    # treatment_id = data[data[,col_id]==name_treat & data[,col_time]==T_in,col_id_num],
+    unit_names_variable = col_id,
+    time_predictors_prior = c(T_inf:(T_in-delay-1), T_in:T_fi),
+    time_optimize_ssr = c(T_inf:(T_in-delay-1), T_in:T_fi),
+    time_plot = T_inf:T_fi2,
+    t_in = T_in,
+    t_fi = T_fi,
+    t_fi2 = T_fi2
+  )
+  
+  print(paste0("Synth things ", treated))
+  
+  output_total$path.plot
+  
+  print(output_total$synth.tables$tab.pred %>% as.data.frame())
+  print(output_total$synth.tables$tab.w %>% as.data.frame() %>%
+          arrange(desc(w.weights)))
+  
+  # print(paste0("graph ", treated))
+  
+  # Total:
+  plot_treated <- data.frame(Y1 = output_total$Y1,
+             Y_synth = output_total$Y_synth%*%output_total$synth.result$solution.w,
+             year = T_in:T_fi2) %>%
+    pivot_longer(cols = c("Y1", "w.weight")) %>%
+    ggplot() +
+    geom_line(aes(x = year, y = value, colour = name)) +
+    geom_vline(xintercept = T_fi) +
+    geom_vline(xintercept = 
+                 (main_dta %>%
+                    filter(geo == treated))$year_stage1[1]) +
+    # geom_vline(xintercept = NA) +
+                 # (main_dta %>%
+                 #    filter(geo == treated))$year_stage1[1]) +
+    labs(
+      title = paste0(treated, " ", (main_dta %>% filter(geo == treated))$year_announced[1])
+                     
+    )
+  print(plot_treated)
+  # print("should have worked")
+  
+  # Mediator:
+  plot_mediator <- data.frame(M1 = output_total$M1,
+             M_synth = output_total$M_synth%*%output_total$synth.result$solution.w,
+             year = T_in:T_fi2) %>%
+    pivot_longer(cols = c("M1", "w.weight")) %>%
+    ggplot() +
+    geom_line(aes(x = year, y = value, colour = name)) +
+    geom_vline(xintercept = T_fi) +
+    geom_vline(xintercept = 
+                 (main_dta %>%
+                    filter(geo == treated))$year_stage1[1])
+  
+  print(plot_mediator)
+}
+```
