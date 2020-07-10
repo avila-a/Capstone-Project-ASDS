@@ -144,8 +144,8 @@ CLEAN DATA, SUMMARY STATISTICS
     - [ ] Remove "rural" NUTS regions? (or those with different pop densities?)
     - [ ] Remove very south-european / meditarranian economies?
   - [x] Restrict cities outside 50-100km of a LEZ AND outside the same NUTS2 region (+ unite the Rhine-Ruhr area)
-- [ ] Review it is ready for analysis (clean and meaningful)
-  - [ ] Re-run code to get data from Eurostat
+- [x] Review it is ready for analysis (clean and meaningful)
+  - [x] Re-run code to get data from Eurostat
 
 INTERMEDIATE TASK
 
@@ -153,8 +153,8 @@ INTERMEDIATE TASK
 
 START ANALYSIS
 
-- [ ] Do Synthetic Control for some cities and each outcome
-  - [ ] First check which combination of controls reduce pre-treatment RMSE and choose accordingly
+- [x] Do Synthetic Control for some cities and each outcome
+  - [x] First check which combination of controls reduce pre-treatment RMSE and choose accordingly
   - [ ] Do robustness checks:
     - [ ] Sizable effect: check pre and post (RMSE)
     - [ ] Check if restricting controls further changes results (SUTVA)
@@ -188,20 +188,77 @@ AGOUST
 
 
 
-## Skeleton of paper
-
-### Tentative Index:
+### Tentative Index (Skeleton of paper on Overleaf):
 
 1. Introduction 
+
    1. Reasons for LEZ (Pollution -> health -> legislation -> objective is to reduce pollution)
-   2. Economic critiques of LEZ (Economy, Investment, )
-   3. Why and how (literature)  a reduction of pollution can improve the economy? (theory of change)
-   4. My question, Does this apply to LEZ (does pollution mediates...)?
+
+   1. Economic critiques of LEZ (Economy, Investment, )
+   2. Why and how (literature)  a reduction of pollution can improve the economy? (theory of change)
+   3. My question, Does this apply to LEZ (does pollution mediates...)?
+
 2. Data Sources / Analysis techniques /
+
 3. Results
+
 4. Conclusions
 
 
+
+### Notes on preliminary results
+
+1. Test if I can indeed create a synthetic control with a pre-intervention placebo (the announcement date is 2007 but I act as if it were 2005):
+
+![image-20200710120237717](C:\Users\aavil\OneDrive\Documentos\A - Estudios\LSE_ASDS\Project\Capstone-Project\Notes and meetings\Notes on capstone project.assets\image-20200710120237717.png)
+
+**Y1** is the real "Hannover", **w.weight** is the synthetic control. To test that there should be no major discrepancies in the pre intervention period (from 2005 to 2007 given the policy has not passed).
+
+This is only possible for 3 major german cities: Münster, Hannover and Osnabreukt (of 8 possible)
+
+
+
+2. I then create the "real" synthetic control (with all pre intervention periods until 2007, the year of announcement)
+
+![image-20200710120943284](C:\Users\aavil\OneDrive\Documentos\A - Estudios\LSE_ASDS\Project\Capstone-Project\Notes and meetings\Notes on capstone project.assets\image-20200710120943284.png)
+
+
+
+Looks like a good pre-intervention fit. And that LEZ could have reduced unemployment in Hannover.
+
+Furthermore, the control region has very similar pollution levels before the intervention and similar *GDP/capita* and *yearly wages/worker*
+
+![image-20200710131149088](C:\Users\aavil\OneDrive\Documentos\A - Estudios\LSE_ASDS\Project\Capstone-Project\Notes and meetings\Notes on capstone project.assets\image-20200710131149088.png)
+
+
+
+3. Finally I test if this difference is significant by comparing it's magnitude with control regions, especially those that contributed to create the synthetic Hannover. (and restricting to those that have good pre-intervention fit)
+
+![image-20200710121305011](C:\Users\aavil\OneDrive\Documentos\A - Estudios\LSE_ASDS\Project\Capstone-Project\Notes and meetings\Notes on capstone project.assets\image-20200710121305011.png)
+
+
+
+These are the **gaps** between synthetic control and treated (DE92_T) is Hannover.  result is that Hannover is not that special, All similar control regions experience a reduction in pollution compared to their own synthetic controls.
+
+The effect is not significant.
+
+
+
+Female unemployment is similar but more extreme,  looks like there was a strong reduction in women's unemployment in Hannover, but it is not specific of that city as other German controls also had the same phenomena:
+
+![image-20200710133336299](C:\Users\aavil\OneDrive\Documentos\A - Estudios\LSE_ASDS\Project\Capstone-Project\Notes and meetings\Notes on capstone project.assets\image-20200710133336299.png)
+
+![image-20200710133411304](C:\Users\aavil\OneDrive\Documentos\A - Estudios\LSE_ASDS\Project\Capstone-Project\Notes and meetings\Notes on capstone project.assets\image-20200710133411304.png)
+
+
+
+### And the Mediator?
+
+On the mediator the results are less interesting, the Synthetic control method fails to find the causal effect of LEZ on pollution reduction even with high quality spatial data. And noise is too big to actually say if there is any effect (or no)
+
+**Pre and post-LEZ** pollution for Hannover (announcement and implementation marked) - It is like this for **all LEZ**.
+
+![image-20200710175447120](C:\Users\aavil\OneDrive\Documentos\A - Estudios\LSE_ASDS\Project\Capstone-Project\Notes and meetings\Notes on capstone project.assets\image-20200710175447120.png) 
 
 ## Notes on things to remember:
 
@@ -216,6 +273,8 @@ Pollution as a mediator:
 
 
 * *A: The case from the border is a "deviant case analysis" to understand what is happening in the main cases in a strong way.  Describe why I do it and frame it in methodological terms. It's the strength of STRONG examples.*
+
+
 
 ## Doubts and possible problems
 
@@ -248,11 +307,13 @@ Pollution as a mediator:
 * **Announcement dates and biased results.** If there are no significant effects in a pre-intervention placebo, then can I say there are no significant anticipation effects?
   * *Alasdair: Placebo IS ok.* 
   * *Its GOOD that I try to do it and others have not, even if I don't do it perfectly, or only for some cities. "Lots of the existing research does not look at anticipation effects and I'm going to try to look at it" is a correct way of framing it*
+  * The announcement date IS the publication of the Air quality plan, maybe I am seen the effect of the JOINT Air Quality plan measures which the LEZ is an important part.
 
 
 
 * Do you see other possible flaws or confounding factors?
   * *None mentioned by Alasdair*
+  * **THE financial CRISIS** **ruins** estimates on unemployment with controls from southern Europe. Future LEZ that are applied outside such a big economic transformation could be easier to review. Or be allowed to
 
 
 
@@ -267,6 +328,10 @@ Pollution as a mediator:
   * LAURA HOSPIDO
   * MI TUTOR + MI PRE TUTOR (sigue siendo anonimo?)
   * Julia
+* Remember to cite
+  * Packages
+    * Synth
+    * 
 
 
 

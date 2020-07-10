@@ -78,7 +78,7 @@ init_sc <- function(data = data, name_treat, outcome, mediator,
                     t_fi2,
                     control_vars,
                     restr_contr_var = "contr_restr_point",
-                    nuts_level = nuts_level,
+                    nuts_level = 2,
                     remove_controls = NA,
                     remove_countries = NA){
   
@@ -135,10 +135,10 @@ init_sc <- function(data = data, name_treat, outcome, mediator,
   # Create a list of controls
   controls <- data_temp[data_temp[, restr_contr_var] == TRUE, ]
   controls <- controls %>%
-    # filter(
+    filter(
     #   # contr_restr_60km == TRUE, # This can be OTHER variableS
-    #   contr_restr_point == TRUE,
-    # ) %>%
+      nuts_level == nuts_level
+    ) %>%
     filter(!(country %in% remove_countries)) %>%
     filter(!(geo %in% remove_controls)) %>% 
     select(geo) %>% unique()
@@ -159,6 +159,7 @@ init_sc <- function(data = data, name_treat, outcome, mediator,
   
   assign("controls", controls , envir = .GlobalEnv)      # !!!
   
+  # print(paste0("Number of controls2: ", length(controls)))
   
   #Add fake pre-treatment outcomes to optimize on pre-treatment mediator values (automatic) during the choice of matrix V
   
@@ -173,10 +174,12 @@ init_sc <- function(data = data, name_treat, outcome, mediator,
   data2[,Y] <- data2[,M]
   data2 <- data2[order(data2[,col_id_num], data2[,col_time]),]
   
+  
   data2[,col_time] <- rep((T_in-length(T_in:T_fi)-delay):(T_in-1-delay),
                           length(controls)+1) # or controls+1
   data_temp <- rbind(data2, data_temp)
-  data_temp <- data_temp[order(data_temp[,col_id_num], decreasing=F),]
+  data_temp <- data_temp[order(data_temp[,col_id_num],
+                               decreasing=F),]
   # remove(data2)
   
   # #Fake starting time (automatic)
@@ -266,7 +269,8 @@ do_synth_total <- function(
   )
   
   synth_result <- synth(data.prep.obj = prepar,
-                        Margin.ipop=.005,Sigf.ipop=7,Bound.ipop=6)
+                        Margin.ipop=.005,Sigf.ipop=7,Bound.ipop=6
+                        )
   
   # Do MASC-Specific stuff:
   Y1 <- dta_imput[which(dta_imput[,ncol(dta_imput)]==1 &
@@ -347,7 +351,7 @@ Look at a list of treated
 ```{r}
 main_dta %>%
   filter(treated_uz == TRUE) %>%
-  # filter(nuts_level == 2) %>%
+  filter(nuts_level == 3) %>%
   select(LEZ, geo, year_announced, year_stage1) %>% unique()
 ```
 
@@ -367,21 +371,44 @@ Load the database:
 * mediator and
 * outcome
 
-
+### Test if I have the data
 
 ```{r}
 # Control Vars unemployment / temporality
-control_vars_labor <- c("urb_index", 
-                        "active_F_share", 
-                        "gdp_eur_hab",
-                        "wages_per_worker" # controls
+control_vars_labor <- c("urb_index"
+                        # "active_F_share", 
+                        # "gdp_eur_hab",
+                        # "wages_per_worker" # controls
                         # "empl_prop_F",
                         # "empl_prop_K_N"
                         # "empl_prop_A", , "empl_prop_B_E", "empl_prop_O_U",
                         # "empl_prop_G_J", 
 )
 
+countries_to_remove <- c("ES", "EL", "PT")
 
+# ---
+
+temp_1 <- main_dta %>% as.data.frame() %>%
+    # If I use a variable that has only NUTS 2 regions
+    filter(nuts_level == 3)  %>% 
+    # Optional? restrict years ro 2001-2016, the period of mediator
+    filter(time >= 2001 & time <= 2016)
+
+temp <- balanced(data = temp_1 %>% filter(), 
+                 TIME = "time", ID = "geo", 
+                 VARS = c("mean_pol_gdp", "gdp_eur_hab",
+                          control_vars_labor, "contr_restr_60km"))
+
+main_dta %>%
+  select(geo, time, mean_pol,
+         empl_TOTAL, gdp_eur_hab) %>%
+  filter(geo == "DEG01")
+```
+
+
+
+```{r}
 # # Name of the treated unit in the column with ID "col_id"
 # 
 # # DE30 -> Berlin, No clear effect (DE+ CZ-ostrava)
@@ -397,19 +424,20 @@ control_vars_labor <- c("urb_index",
 #   filter(time >= 2001 & time <= 2016)
 
 init_sc(data = main_dta,
-        nuts_level = 2,
-        name_treat = "DE30",
-        outcome = "unempR_T",
+        nuts_level = 3,
+        name_treat = "DE601",
+        outcome = "gdp_eur_hab",
         mediator = "mean_pol_gdp",
         id_col = "geo",
         # id_col_num = "num_id",
         col_time = "time",
         t_in = 2001, # First year of polution data,
         announced_or_implemented = "A",
-        # t_fi
+        # t_fi = 2007,
         t_fi2 = 2016, # Last year of analysis
         control_vars = control_vars_labor,
-        restr_contr_var = "contr_restr_60km") # True/false if it is valid control
+        restr_contr_var = "contr_restr_60km",
+        remove_countries = countries_to_remove) # True/false if it is valid control
 ```
 
 
@@ -475,40 +503,56 @@ map_pool_1 <- leaflet() %>% addTiles() %>%
                 "<b>", donor_pool_1$NUTS_ID, "</b> <br/>",
                 "<b> Weight </b>", donor_pool_1$tab.w.w.weights, "<br/>")
               )
+# map_pool_1
 ```
 
 ### Placebo treated:
 
 ```{r}
 control_vars_labor <- c(
-  # "urb_index",
+  # "urb_index"
   # "active_F_share",
-  "gdp_eur_hab",
-  "wages_per_worker"
+  # "gdp_eur_hab",
+  # "wages_per_worker"
   ) # controls
 
 countries_to_remove <- c("ES", "EL", "PT")
 # https://data.worldbank.org/indicator/SL.UEM.TOTL.NE.ZS?locations=DE-ES-GR-PL-NL-PT-LU-CZ-HU
 
+temp_1 <- main_dta %>% as.data.frame() %>%
+    # If I use a variable that has only NUTS 2 regions
+    filter(nuts_level == 3)  %>% 
+    # Optional? restrict years ro 2001-2016, the period of mediator
+    filter(time >= 2001 & time <= 2016)
 
-list_treated <- main_dta %>%
+temp <- balanced(data = temp_1 %>% filter(), 
+                 TIME = "time", ID = "geo", 
+                 VARS = c("mean_pol_gdp", "empl_rate_wpop",
+                          control_vars_labor, "contr_restr_60km"))
+
+list_treated <- temp %>%
   filter(treated_uz == TRUE) %>%
-  filter(nuts_level == 2,
+  filter(nuts_level == 3,
          year_stage1 <= 2016,
-         !(geo %in% c("DEB3", "DED5"))) %>%
+         (!is.na(year_announced)), # has announcment date
+         # !(geo %in% c("DE929", "DE944"))
+         ) %>%
   select(LEZ, geo, year_stage1, year_announced) %>% 
   unique() ; list_treated
 
 list_treated <- list_treated$geo
+
+# Berlin is the ONLY nuts 3 region with this data complete :(
+# Makes no sense to do 
 
 for (treated in list_treated){
   
   print(paste0("init ", treated))
   
   init_sc(data = main_dta,
-          nuts_level = 2,
+          nuts_level = 3,
           name_treat = treated,
-          outcome = "unempR_T",
+          outcome = "empl_TOTAL",
           mediator = "mean_pol_gdp",
           id_col = "geo",
           # id_col_num = "num_id",
@@ -518,7 +562,7 @@ for (treated in list_treated){
           t_fi = 2005,
           t_fi2 = 2016, # Last year of analysis
           control_vars = control_vars_labor,
-          restr_contr_var = "contr_restr_point", # True/false if it is valid control
+          restr_contr_var = "contr_restr_60km", # True/false if it is valid control
           remove_countries = countries_to_remove
           # remove_controls = c("EL62")
   ) 
