@@ -163,6 +163,35 @@ nuts_time <- nuts_time %>%
  ### Controls: 
 
 # Investment/capita (nuts 2)
+
+nuts_time <- nuts_time %>%
+  # dplyr::group_by(geo) %>%
+  mutate(inv_per_worker = # both in thousands
+           (inv_TOTAL*1000)/(empl_TOTAL*1000))
+
+# investment per ¿employee? ( in Euros per head)
+nuts_time <- nuts_time %>%
+  mutate(inv_per_worker = # Inv in millions, empl in tousands 
+           (inv_TOTAL*1000000)/(empl_TOTAL*1000))
+
+nuts_time <- nuts_time %>%
+  mutate(activity_rate = # Both in thousands
+           (pop_total*1000)/(active_T_Y_GE15*1000))
+
+
+# Proportion of sector's employment ( in which sectors has employment increased more, could this be linked to the application of a LEZ?)
+
+nuts_time <- nuts_time %>%
+  mutate(empl_rate_agriculture = empl_A/empl_TOTAL,
+         empl_rate_industry = `empl_B-E`/empl_TOTAL,
+         empl_rate_retail = `empl_F`/empl_TOTAL, # Wholesale and retail trade, transport, accommodation and food service activities
+         empl_rate_financial = `empl_K`/empl_TOTAL,
+         empl_rate_realstate = `empl_L`/empl_TOTAL,
+         empl_rate_professional = `empl_M_N`/empl_TOTAL,
+         empl_rate_public = `empl_O-Q`/empl_TOTAL,
+         empl_rate_entretainment = `empl_R-U`/empl_TOTAL)
+
+
 # Educational level/capita (nuts 2)
 # Dependency ratio (NUTS 2)
 
@@ -483,7 +512,7 @@ n2_dta <- main_dta %>%
 n2_dta <- n2_dta %>%
   filter(geo != "DEG0")
 
-out_n2 <- gsynth(unempR_T ~ is_announced,
+out_n2 <- gsynth(unempR_T ~ is_announced_2y,
                  + wages_per_worker
                  + gdp_eur_hab,
                  urb_index,
@@ -515,7 +544,7 @@ for (i in n2_dta[n2_dta$treated_uz == TRUE, ]$geo %>% unique()){
   plot(out_n2, type = "counterfactual", id = i) # Berlin
 }
 # 
-# plot(out_n2, type = "counterfactual", id = "DE21") # 
+# plot(out_n2, type = "counterfactual", id = "DE21") # Munich
 # plot(out_n2, type = "counterfactual", id = "DE13") # Freiburg
 # plot(out_n2, type = "counterfactual", id = "DE50") # Bremen 
 # plot(out_n2, type = "counterfactual", id = "DE92") # Hannover 

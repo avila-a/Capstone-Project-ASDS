@@ -37,31 +37,31 @@ nuts_treated <- readRDS("data/nuts_sf_treated") %>%
   sf::st_as_sf()
 ```
 
-## Add variables (temporal)
+<!-- ## Add variables (temporal) -->
 
-```{r}
-# investment per ¿employee? ( in Euros per head)
-main_dta2 <- main_dta2 %>%
-  mutate(inv_per_worker = # Inv in millions, empl in tousands 
-           (inv_TOTAL*1000000)/(empl_TOTAL*1000))
+<!-- ```{r} -->
+<!-- # investment per ¿employee? ( in Euros per head) -->
+<!-- main_dta2 <- main_dta2 %>% -->
+<!--   mutate(inv_per_worker = # Inv in millions, empl in tousands  -->
+<!--            (inv_TOTAL*1000000)/(empl_TOTAL*1000)) -->
 
-main_dta2 <- main_dta2 %>%
-  mutate(activity_rate = # Both in thousands
-           (pop_total*1000)/(active_T_Y_GE15*1000))
+<!-- main_dta2 <- main_dta2 %>% -->
+<!--   mutate(activity_rate = # Both in thousands -->
+<!--            (pop_total*1000)/(active_T_Y_GE15*1000)) -->
 
 
-# Proportion of sector's employment ( in which sectors has employment increased more, could this be linked to the application of a LEZ?)
+<!-- # Proportion of sector's employment ( in which sectors has employment increased more, could this be linked to the application of a LEZ?) -->
 
-main_dta2 <- main_dta2 %>%
-  mutate(empl_rate_agriculture = empl_A/empl_TOTAL,
-         empl_rate_industry = `empl_B-E`/empl_TOTAL,
-         empl_rate_retail = `empl_F`/empl_TOTAL, # Wholesale and retail trade, transport, accommodation and food service activities
-         empl_rate_financial = `empl_K`/empl_TOTAL,
-         empl_rate_realstate = `empl_L`/empl_TOTAL,
-         empl_rate_professional = `empl_M_N`/empl_TOTAL,
-         empl_rate_public = `empl_O-Q`/empl_TOTAL,
-         empl_rate_entretainment = `empl_R-U`/empl_TOTAL)
-```
+<!-- main_dta2 <- main_dta2 %>% -->
+<!--   mutate(empl_rate_agriculture = empl_A/empl_TOTAL, -->
+<!--          empl_rate_industry = `empl_B-E`/empl_TOTAL, -->
+<!--          empl_rate_retail = `empl_F`/empl_TOTAL, # Wholesale and retail trade, transport, accommodation and food service activities -->
+<!--          empl_rate_financial = `empl_K`/empl_TOTAL, -->
+<!--          empl_rate_realstate = `empl_L`/empl_TOTAL, -->
+<!--          empl_rate_professional = `empl_M_N`/empl_TOTAL, -->
+<!--          empl_rate_public = `empl_O-Q`/empl_TOTAL, -->
+<!--          empl_rate_entretainment = `empl_R-U`/empl_TOTAL) -->
+<!-- ``` -->
 
 
 ## Clean dataset
@@ -90,6 +90,18 @@ main_dta2 <- main_dta2 %>%
       is.na(year_stage1) ~ as.integer(0), # If its control, never
       is.na(year_announced) ~ NA_integer_, # If i dont have date of announcment, forget observaton
       time < year_announced - 2 ~ as.integer(0), # If its before
+      TRUE ~ as.integer(1) # if neither, then its after
+    ),
+    is_announced_4y = case_when(
+      is.na(year_stage1) ~ as.integer(0), # If its control, never
+      is.na(year_announced) ~ NA_integer_, # If i dont have date of announcment, forget observaton
+      time < year_announced - 4 ~ as.integer(0), # If its before
+      TRUE ~ as.integer(1) # if neither, then its after
+    ),
+    is_announced_6y = case_when(
+      is.na(year_stage1) ~ as.integer(0), # If its control, never
+      is.na(year_announced) ~ NA_integer_, # If i dont have date of announcment, forget observaton
+      time < year_announced - 6 ~ as.integer(0), # If its before
       TRUE ~ as.integer(1) # if neither, then its after
     )
   )
@@ -1400,12 +1412,16 @@ main_dta_n3 <- main_dta_n3 %>%
   filter(nuts_level == 3)
 
 dta_analysis <- main_dta_n3
+  
+# Restrict sample to cities that applied a LEZ after announcment or anfter the first year of LEZ
+dta_analysis <- dta_analysis %>%
+  filter(FALSE == (treated_uz & date_announced <= as.Date("01/10/2019"))) # or year_announced
 
-
-
-
-
-
+# # # review the cut was correct
+# dta_analysis %>%
+#   filter(treated_uz) %>%
+#   select(date_announced) %>%
+#   unique()
 
 # temp2 <- dta_analysis %>%
 #   filter(time > 2001,
@@ -1433,30 +1449,25 @@ Change to mean_pol_gdp for pollution estimates
 > Have to restrict control, restrict treated to comparable cities
 > Possibly restrict treated to after 2009 (end of scrapage program), If i do it after announcment i stay with only 2 cities. If I do it after implementation I have enough cities to get ATE.
 
+> Restricting after sep 2009, DENLBE, 30km: DE713 has very bad control
+> REVIEW DEA33
+
 ```{r}
-# Restrict sample to cities that applied a LEZ after announcment or anfter the first year of LEZ
-dta_analysis <- dta_analysis %>%
-  filter(FALSE == (treated_uz & year_stage1 <= 2009)) # or year_announced
-
-dta_analysis %>%
-  filter(treated_uz) %>%
-  select(year_announced) %>%
-  unique()
-
 n3_dta <- dta_analysis %>%
   
-  # filter(!(geo %in% c("DE92"))) %>%
+  filter(!(geo %in% c("DE713"))) %>%
   
   filter(treated_uz | contr_restr_30km) %>%
   # filter(pop_km2 > 200) %>%  #avoid rural areas
   filter(country %in% c("DE", "NL", "BE")) %>%
-  filter(!(country %in% c("ES", "EL", "PT", "PL", "TR")))
-  # group_by(geo) %>%
-  # filter(mean(gdp_eur_hab, na.rm = TRUE) < 100000)
+  filter(!(country %in% c("ES", "EL", "PT", "PL", "TR"))) %>%
+  group_by(geo) %>%
+  filter(mean(gdp_eur_hab, na.rm = TRUE) < 100000) %>%
   # filter(
   #   # mean(wages_per_worker, na.rm = TRUE) < ,
   #   mean(wages_per_worker, na.rm = TRUE) > 10000
   # ) %>%
+  ungroup()
 
 # Minimum pop density in sample and in treated
 n3_dta$pop_km2 %>% summary()
@@ -1466,16 +1477,16 @@ out_n3 <- gsynth(gdp_eur_hab ~ is_announced,
                data = n3_dta, 
                index = c("geo","time"), 
                na.rm = TRUE, # remove 
-               force = "time", # unit or time fixed effects or both?
+               force = "two-way", # unit or time fixed effects or both?
                # CV = TRUE, 
-               r = c(0, 4), # an integer specifying the number of factors. If CV = TRUE, the cross validation procedure will select the optimal number of factors from r to 5.
+               r = c(0, 5), # an integer specifying the number of factors. If CV = TRUE, the cross validation procedure will select the optimal number of factors from r to 5.
                se = TRUE, 
                EM = TRUE, # Gobillon and Magnac (takes a lot of time)
                # inference = "parametric",
                # estimator = "mc",
                nboots = 200,  #500
                parallel = TRUE, cores = 5, # if do parallel and how many cores
-               min.T0 = 6) # Has to be larger than r.max+1
+               min.T0 = 7) # Has to be larger than r.max+1
 
 out_n3 %>% print()
 plot(out_n3)#, ylim = c(-5000, 2000))
