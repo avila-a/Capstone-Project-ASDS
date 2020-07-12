@@ -25,79 +25,95 @@ library(xtable)
 Load Data 
 ```{r}
 setwd("~/A - Estudios/LSE_ASDS/Project/Capstone-Project/Related research/Abadie et al (2015) replication files")
-
 d <- read.dta("repgermany.dta")
 
+main_dta <- readRDS("data/main_dta.rds")
+nuts_treated <- readRDS("data/nuts_sf_treated") %>%
+  sf::st_as_sf()
+```
+
+
+Restrict dataset so it becomes balanced:
+
+```{r}
+# code from https://stackoverflow.com/a/25672453/12422706
+balanced <- function(data, ID, TIME, VARS, required=c("all","shared")) {
+    if(is.character(ID)) {
+        ID <- match(ID, names(data))
+    }
+    if(is.character(TIME)) {
+        TIME <- match(TIME, names(data))
+    }
+    if(missing(VARS)) { 
+        VARS <- setdiff(1:ncol(data), c(ID,TIME))
+    } else if (is.character(VARS)) {
+        VARS <- match(VARS, names(data))
+    }
+    required <- match.arg(required)
+    idf <- do.call(interaction, c(data[, ID, drop=FALSE], drop=TRUE))
+    timef <- do.call(interaction, c(data[, TIME, drop=FALSE], drop=TRUE))
+    complete <- complete.cases(data[, VARS])
+    tbl <- table(idf[complete], timef[complete])
+    if (required=="all") {
+        keep <- which(rowSums(tbl==1)==ncol(tbl))
+        idx <- as.numeric(idf) %in% keep
+    } else if (required=="shared") {
+        keep <- which(colSums(tbl==1)==nrow(tbl))
+        idx <- as.numeric(timef) %in% keep
+    }
+    data[idx, ]
+}
+```
+
+
+
+
+```{r}
 dta_synth <- main_dta %>% as.data.frame() %>%
-  # Controls are 50km away from cities that have applied a LEZ o similar mesure, probably have to bi limited to one treated only 
-  filter(treated_uz | contr_restr_60km) %>% 
   # Only NUTS 2 regions
   filter(nuts_level == 2)  %>% 
   # create numeric id
   mutate(num_id = as.numeric(as.factor(geo))) %>%
   # # only keep one treated and all controls - FOR NOW
   # filter(contr_restr_50km | geo == "DE30") %>%
-  # # Optional? restrict years ro 2001-2018,
-  filter(time >= 2000 & time <= 2018)
+  # # Optional? restrict years ro 2001-2017,
+  filter(time >= 2000 & time <= 2017)  # Not all of them have data for 2008
 
 
 dta_synth$geo %>% unique() %>% length()
 
 # Delete controls that have missing data in outcome or controls
 
-# remove_geos_missing <- function(data, variable){
-#   data %>%
-#     dplyr::group_by(geo) %>%
-#     dplyr::mutate(temp = is.na(variable),
-#                   temp = (sum(temp) == 0)) %>%
-#     ungroup() %>%
-#     filter(temp == TRUE) %>%
-#     dplyr::select(-temp)
-# }
+control_vars <- c("urb_index", "gdp_eur_hab", "wages_per_worker")
+outcome <- "unempR_T"
+remove_countries <-  c("ES", "EL", "PT", "PL")
+# https://data.worldbank.org/indicator/SL.UEM.TOTL.NE.ZS?locations=DE-ES-GR-PL-NL-PT-LU-CZ-HU
+remove_controls <- NA
 
-# dta_synth <- dta_synth %>%
-#   dplyr::group_by(geo) %>%
-#   dplyr::mutate(temp = is.na(unempR_T) | 
-#                   is.na(urb_index) | 
-#                   is.na(active_F_share),
-#                 temp = (sum(temp) == 0)) %>%
-#   ungroup() %>%
-#   filter(temp == TRUE) %>%
-#   dplyr::select(-temp)  %>%
-#   select(geo, time, num_id, unempR_T, urb_index, active_F_share)
+# restrict the sample to a balanced panel
+dta_synth <- balanced(data = dta_synth, TIME = "time", ID = "geo", 
+                      VARS = c(control_vars, 
+                               outcome))
 
-
-# missing.at.least.one <- unique(dta_synth$geo[!complete.cases(dta_synth)])
-# 
-# dta_synth <- dta_synth[!(dta_synth$geo %in% missing.at.least.one),]
-
-dta_synth <- dta_synth[complete.cases(
-  dta_synth %>%
-    select(geo, time, num_id, 
-           unempR_T, 
-           urb_index, active_F_share, gdp_eur_hab
-           )), ]
-
-incomplete <- which((dta_synth$geo %>% table(useNA = "no")) < length(unique(dta_synth$time)))
-# 
+# Create a numerical id for each geo
 dta_synth <- dta_synth %>%
-  filter(!(geo %in% names(incomplete))) %>%  # Delete incomplete series
   mutate(num_id = as.numeric(as.factor(geo))) %>%
   arrange(num_id)
 
-dta_synth %>%
-  select(geo, time, num_id, unempR_T, urb_index, active_F_share)
-
-# dta_synth$num_id %>% table() # all geos are complete
-
 controls <- dta_synth %>%
   filter(contr_restr_60km == TRUE) %>%
+  filter(!(country %in% remove_countries)) %>%
+  filter(!(geo %in% remove_controls)) %>%
   select(num_id) %>% unique()
 controls <- controls$num_id
 
 dta_synth %>%
   filter(treated_uz == TRUE) %>%
   select(nuts_name, num_id) %>% unique()
+
+dta_synth %>%
+  filter(num_id %in% controls) %>%
+  select(geo, num_id) %>% unique()
 ```
 
 ## Table 1 & 2, Figure 1, 2, & 3
@@ -110,18 +126,18 @@ dta_synth %>%
 dataprep.out <-
   dataprep(
            foo = dta_synth,
-           predictors    = c("unempR_T", "urb_index",
-                             "active_F_share", "gdp_eur_hab"),
-           dependent     = "unempR_T",
+           predictors    = c(outcome, control_vars),
+           dependent     = outcome,
            unit.variable = "num_id",
            time.variable = "time",
-           # special.predictors = list(
+           # special.predictors =
+           # list(
            #  list("industry", 1971:1980, c("mean")),
            #  list("schooling",c(1970,1975), c("mean")),
            #  list("invest70" ,1980, c("mean"))
            # ),
            unit.names.variable = "geo",
-           treatment.identifier = 7, # 7 is DE30 (Berlin), 8 is Bremen
+           treatment.identifier = "DE92", # 7 is DE30 (Berlin), 8 is Bremen
            controls.identifier = controls,
            time.predictors.prior = 2000:2007, # PRE-treatment periods
            time.optimize.ssr = 2000:2007,
@@ -136,6 +152,8 @@ synth.out <-
         Sigf.ipop=7,
         Bound.ipop=6
         )
+path.plot(dataprep.res = dataprep.out, 
+          synth.res = synth.out)
 ```
 
 ```{r}
@@ -152,7 +170,9 @@ gaps.plot(dataprep.res = dataprep.out,
 synth.tables <- synth.tab(
                           dataprep.res = dataprep.out,
                           synth.res = synth.out
-                          ); synth.tables
+                          ); 
+
+synth.tables[[3]] %>% as.data.frame() %>% arrange(desc(w.weights) )
 ```
 
 

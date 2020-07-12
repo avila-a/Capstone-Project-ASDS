@@ -282,7 +282,7 @@ write.csv(emp_h_workN2, "data/eurostat/hours_worked_nuts2.csv")
 
 
 Investment in capital per NUTS 2 region:
-
+(in million euros)
 > ! France, NO and DE have less data of investment
 
 ```{r}

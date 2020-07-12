@@ -253,7 +253,7 @@ emp_complete %>% head()
 
 ### Investment:
 
-- From 2000 to 2017
+- From 2000 to 2017 ( in million euros)
 
 > ! France, NO and DE have less data of investment
 

@@ -404,12 +404,6 @@ library(lubridate)
 # (Would be good to do this before.)
 
 main_dta <- main_dta %>%
-  # group_by(geo) %>%
-  # mutate(
-  #   year_inagurated = as_date(Stage_1, format = "%d.%m.%Y") %>% year(),
-  #   year_announced = as_date(Announcment, format = "%d.%m.%Y") %>% year(),
-  # ) %>%
-  # ungroup() %>%
   mutate(
     is_inagurated = case_when(
       is.na(year_stage1) ~ 0, # If its control, never inagurated
@@ -427,6 +421,12 @@ main_dta <- main_dta %>%
       is.na(year_announced) ~ NA_integer_, # If i dont have date of announcment, forget observaton
       time < year_announced ~ as.integer(0), # If its before
       TRUE ~ as.integer(1) # if neither, then its after
+    ),
+    is_announced_2y = case_when(
+      is.na(year_stage1) ~ as.integer(0), # If its control, never
+      is.na(year_announced) ~ NA_integer_, # If i dont have date of announcment, forget observaton
+      time < year_announced - 2 ~ as.integer(0), # If its before
+      TRUE ~ as.integer(1) # if neither, then its after
     )
   )
 
@@ -440,8 +440,8 @@ main_dta %>%
 # Prepare data for NUTS 2 synthetic control -> restrict controls
 n2_dta <- main_dta %>%
   # FILTER SPAIN AND GREECE! (for those applied close to the finantial crisis)
-  filter(!(country %in% c("ES", "EL", "PT"))) %>%
-  
+  filter(!(country %in% c("ES", "EL", "PT", "PL", "TR"))) %>%
+# https://data.worldbank.org/indicator/SL.UEM.TOTL.NE.ZS?locations=DE-ES-GR-PL-NL-PT-LU-CZ-HU
   filter(treated_uz | contr_restr_60km) %>% # Controls are 50km away from cities that have applied a LEZ o similar mesure, probably have to bi limited to one treated only 
   filter(nuts_level == 2) # Not necessary, If I use a variable that has only NUTS 2 regions
 
@@ -476,22 +476,30 @@ n2_dta <- main_dta %>%
 ### Try Gsynth N2
 
 ```{r}
-out_n2 <- gsynth(unempR_T ~ is_inagurated,
-                 # + wages_per_worker
-                 # + gdp_eur_hab,
-                 # urb_index, 
+
+# data_one_treated <- n2_dta %>%
+#   filter(geo == "DE30" | contr_restr_60km)
+
+n2_dta <- n2_dta %>%
+  filter(geo != "DEG0")
+
+out_n2 <- gsynth(unempR_T ~ is_announced,
+                 + wages_per_worker
+                 + gdp_eur_hab,
+                 urb_index,
                data = n2_dta, 
                index = c("geo","time"), 
                na.rm = TRUE, # remove 
-               force = "none", # unit or time fixed effects or both?
+               force = "two-way", # unit or time fixed effects or both?
                # CV = TRUE, 
-               # r = c(0, 4), # an integer specifying the number of factors. If CV = TRUE, the cross validation procedure will select the optimal number of factors from r to 5.
+               r = c(0, 3), # an integer specifying the number of factors. If CV = TRUE, the cross validation procedure will select the optimal number of factors from r to 5.
                se = TRUE, 
-               # EM = TRUE, # Gobillon and Magnac (takes a lot of time)
-               # inference = "parametric", 
+               EM = TRUE, # Gobillon and Magnac (takes a lot of time)
+               inference = "parametric",
+               # estimator = "mc",
                nboots = 100,  #500
                parallel = TRUE, cores = 5, # if do parallel and how many cores
-               min.T0 = 7) # Has to be larger than r.max+1
+               min.T0 = 5) # Has to be larger than r.max+1
 
 out_n2 %>% print()
 plot(out_n2)#, ylim = c(-5000, 2000))
@@ -503,10 +511,15 @@ plot(out_n2, type = "counterfactual",
 plot(out_n2, type = "counterfactual", 
      raw = "none", main="") # Why the final dip?
 
-plot(out_n2, type = "counterfactual", id = "DE30") # Berlin
-plot(out_n2, type = "counterfactual", id = "DE21") # 
-plot(out_n2, type = "counterfactual", id = "DE13") # Freiburg
-plot(out_n2, type = "counterfactual", id = "DE50") # Bremen 
+for (i in n2_dta[n2_dta$treated_uz == TRUE, ]$geo %>% unique()){
+  plot(out_n2, type = "counterfactual", id = i) # Berlin
+}
+# 
+# plot(out_n2, type = "counterfactual", id = "DE21") # 
+# plot(out_n2, type = "counterfactual", id = "DE13") # Freiburg
+# plot(out_n2, type = "counterfactual", id = "DE50") # Bremen 
+# plot(out_n2, type = "counterfactual", id = "DE92") # Hannover 
+# plot(out_n2, type = "counterfactual", id = "DE60") # Bremen 
 
 # plot(out_n2, type = "raw", theme.bw = TRUE)
 
@@ -519,7 +532,7 @@ plot(out_n2, type = "counterfactual",
      theme.bw = TRUE)
 
 
-plot(out_n2, type = "loadings")
+# plot(out_n2, type = "loadings")
 ```
 
 ```{r}

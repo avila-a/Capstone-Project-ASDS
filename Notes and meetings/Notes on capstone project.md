@@ -206,7 +206,9 @@ AGOUST
 
 
 
-### Notes on preliminary results
+### Notes on preliminary results - The example of Hannover
+
+<img src="C:\Users\aavil\OneDrive\Documentos\A - Estudios\LSE_ASDS\Project\Capstone-Project\Notes and meetings\Notes on capstone project.assets\image-20200711082854994.png" alt="image-20200711082854994" style="zoom:67%;" /> Hannover, Bremen and Berlin, It's LEZ and NUTS2 regions
 
 1. Test if I can indeed create a synthetic control with a pre-intervention placebo (the announcement date is 2007 but I act as if it were 2005):
 
@@ -214,9 +216,9 @@ AGOUST
 
 **Y1** is the real "Hannover", **w.weight** is the synthetic control. To test that there should be no major discrepancies in the pre intervention period (from 2005 to 2007 given the policy has not passed).
 
-This is only possible for 3 major german cities: Münster, Hannover and Osnabreukt (of 8 possible)
 
 
+I can confidently do this ***only*** for Hannover for overall unemployment.
 
 2. I then create the "real" synthetic control (with all pre intervention periods until 2007, the year of announcement)
 
@@ -224,7 +226,7 @@ This is only possible for 3 major german cities: Münster, Hannover and Osnabreu
 
 
 
-Looks like a good pre-intervention fit. And that LEZ could have reduced unemployment in Hannover.
+Looks like a good pre-intervention fit. And looks that the LEZ could have reduced unemployment in Hannover.
 
 Furthermore, the control region has very similar pollution levels before the intervention and similar *GDP/capita* and *yearly wages/worker*
 
@@ -238,7 +240,7 @@ Furthermore, the control region has very similar pollution levels before the int
 
 
 
-These are the **gaps** between synthetic control and treated (DE92_T) is Hannover.  result is that Hannover is not that special, All similar control regions experience a reduction in pollution compared to their own synthetic controls.
+These are the **gaps** between synthetic control and treated (Hannover-DE92_T).  result is that Hannover is not that special, All similar control regions experience a reduction in pollution compared to their own synthetic controls.
 
 The effect is not significant.
 
@@ -256,9 +258,41 @@ Female unemployment is similar but more extreme,  looks like there was a strong 
 
 On the mediator the results are less interesting, the Synthetic control method fails to find the causal effect of LEZ on pollution reduction even with high quality spatial data. And noise is too big to actually say if there is any effect (or no)
 
-**Pre and post-LEZ** pollution for Hannover (announcement and implementation marked) - It is like this for **all LEZ**.
+**Pre and post-LEZ** pollution for Hannover (announcement and implementation marked) - It is like this for **all LEZ**, NUTS 2 and NUTS 3.
 
-![image-20200710175447120](C:\Users\aavil\OneDrive\Documentos\A - Estudios\LSE_ASDS\Project\Capstone-Project\Notes and meetings\Notes on capstone project.assets\image-20200710175447120.png) 
+![image-20200710175447120](C:\Users\aavil\OneDrive\Documentos\A - Estudios\LSE_ASDS\Project\Capstone-Project\Notes and meetings\Notes on capstone project.assets\image-20200710175447120.png)	Not one result has given interpretable results on the mediator (pollution) after many tries and construction of a pollution measure that specifically targets high productive  and high population locations.
+
+
+
+As an interesting research question the role of the mediator is a great idea but it does not apply empirically (faulty data or methods - MASC is only a WP which I had to tailor their code to my objectives and could be working inperfectly.)
+
+
+
+## Separate case and analysis:
+
+###  The case of Erfurt (the only experiment on NUTS3 and GDP)
+
+Erfurt is a small city, far away of any major one:
+
+<img src="C:\Users\aavil\OneDrive\Documentos\A - Estudios\LSE_ASDS\Project\Capstone-Project\Notes and meetings\Notes on capstone project.assets\image-20200710200155462.png" alt="image-20200710200155462" style="zoom:30%;" /> <img src="C:\Users\aavil\OneDrive\Documentos\A - Estudios\LSE_ASDS\Project\Capstone-Project\Notes and meetings\Notes on capstone project.assets\image-20200710200237997.png" alt="image-20200710200237997" style="zoom:25%;" />
+
+ The good thing is that in announced and applied a LEZ **late** (in 2012) so way after the financial crisis and the "cars" reconversion plan. Given it is only tractable as a NUTS 3 region I don't have data on labor outcomes but continue to have its GDP, GVA and Employment/sector measures.
+
+**This is a preliminary result for GDP (with only German NUTS 3 as controls)**
+
+<img src="C:\Users\aavil\OneDrive\Documentos\A - Estudios\LSE_ASDS\Project\Capstone-Project\Notes and meetings\Notes on capstone project.assets\image-20200710201912169.png" alt="image-20200710201912169" style="zoom:70%;" />
+
+Its test of pre-intervention placebo in 2008 (which does not work very good), Again, it's really hard to predict post-financial crisis performance with pre-financial crisis data)
+
+<img src="C:\Users\aavil\OneDrive\Documentos\A - Estudios\LSE_ASDS\Project\Capstone-Project\Notes and meetings\Notes on capstone project.assets\image-20200710195959549.png" alt="image-20200710195959549" style="zoom:80%;" />
+
+And how this positive effect compares with unit placebos (the treatment effects of regions that acted as controls for Erfurt, mostly small cities.)
+
+<img src="C:\Users\aavil\OneDrive\Documentos\A - Estudios\LSE_ASDS\Project\Capstone-Project\Notes and meetings\Notes on capstone project.assets\image-20200710202528550.png" alt="image-20200710202528550" style="zoom:80%;" />
+
+
+
+
 
 ## Notes on things to remember:
 
