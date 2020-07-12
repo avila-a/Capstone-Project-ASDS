@@ -412,7 +412,8 @@ umweltzonen <- umweltzonen %>%
     year_stage1 = as_date(Stage_1, format = "%d.%m.%Y") %>% year(),
     year_stage2 = as_date(Stage_2, format = "%d.%m.%Y") %>% year(),
     year_stage3 = as_date(Stage_3, format = "%d.%m.%Y") %>% year(),
-    year_announced = as_date(Announcment, format = "%d.%m.%Y") %>% year())
+    date_announced = as_date(Announcment),
+    year_announced = year(date_announced))
 
 
 umweltzonen %>% head()
@@ -556,7 +557,7 @@ nuts.sf <- nuts.sf %>%
 ggplot(nuts.sf %>%
          filter(with_uar_60km == TRUE)) +
   geom_sf(aes(color = as.factor(LEVL_CODE))) +
-  geom_sf(data = buffer_50_uar) +
+  geom_sf(data = buffer_60_uar) +
   geom_sf(data = umweltzonen)
 ```
 
@@ -904,7 +905,7 @@ temp_treated <- nuts.sf.treated %>%
          LEVL_CODE == 3)
 
 temp_control <- nuts.sf.treated %>%
-  filter(contr_restr_60km == TRUE,
+  filter(contr_restr_30km == TRUE,
          LEVL_CODE == 3)
 
 treated_and_controls <- leaflet() %>% 
@@ -926,13 +927,15 @@ treated_and_controls <- leaflet() %>%
              popup = paste0(
                "<b>", umweltzonen$LEZ, "</b> <br/>",
                "<b> Start date: </b>", umweltzonen$Stage_1, "<br/>",
+               "<b> Announcment date: </b>",
+               umweltzonen$Announcment, "<br/>",
                "<b> Source: </b> Umweltzonen")) %>% 
   setView(15, 50, zoom = 3)
 
 # treated_and_controls
 
-# htmlwidgets::saveWidget(treated_and_controls,
-#                         file="map_tr_and_controls_.html")
+htmlwidgets::saveWidget(treated_and_controls,
+                        file="map_tr_and_controls_.html")
 ```
 
 For NUTS 2
@@ -969,12 +972,51 @@ treated_and_controls_2 <- leaflet() %>%
                "<b> Source: </b> Umweltzonen")) %>% 
   setView(15, 50, zoom = 3)
 
-# treated_and_controls_2 
+# treated_and_controls_2
 
 # htmlwidgets::saveWidget(treated_and_controls_2,
 #                         file="map_tr_and_controls_n2.html")
 ```
 
+For NUTS 2 (point)
+
+```{r}
+temp_treated <- nuts.sf.treated %>%
+  filter(treated_any == TRUE,
+         LEVL_CODE == 2)
+
+temp_control <- nuts.sf.treated %>%
+  filter(contr_restr_point == TRUE,
+         LEVL_CODE == 2)
+
+treated_and_controls_2_point <- leaflet() %>% 
+  addTiles() %>%
+  addPolygons(data = temp_treated,
+              popup = paste0(
+                "<b>", temp_treated$NUTS_ID, "</b> <br/>",
+                "<b> Start date: </b>", 
+                temp_treated$NUTS_NAME, "<br/>"),
+              weight = 4, col = "red") %>%
+  addPolygons(data = lez_shapes, col = "green") %>%
+  addPolygons(data = temp_control, 
+              col = "blue",
+              popup = paste0(
+                "<b>", temp_control$NUTS_ID, "</b> <br/>",
+                "<b> Name: </b>", 
+                temp_control$NUTS_NAME, "<br/>")
+              ) %>%
+  addMarkers(data = umweltzonen,
+             popup = paste0(
+               "<b>", umweltzonen$LEZ, "</b> <br/>",
+               "<b> Start date: </b>", umweltzonen$Stage_1, "<br/>",
+               "<b> Source: </b> Umweltzonen")) %>% 
+  setView(15, 50, zoom = 3)
+
+# treated_and_controls_2_30
+
+htmlwidgets::saveWidget(treated_and_controls_2_point,
+                        file="map_tr_and_controls_n2_point.html")
+```
 
 end
 
