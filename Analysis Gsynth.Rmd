@@ -13,7 +13,7 @@ output:
 ## Initialize
 
 ```{r}
-rm(list=ls())
+# rm(list=ls())
 ```
 
 ```{r init, message=FALSE}
@@ -115,6 +115,8 @@ main_dta2 %>%
   filter(!is.na(Stage_1))
 ```
 
+> I need to include some for NUTS 3 too!
+
 Delete some treated that are not clear enough to analyse:
 
 ```{r}
@@ -141,6 +143,7 @@ main_dta %>%
   unique() %>%
   filter(!is.na(Announcment))
 ```
+
 
 ## Analysis pre-treatment placebo (2y)
 
@@ -1063,7 +1066,7 @@ plot(out_n2, type = "factors")
 
 <!-- ``` -->
 
-### Wage/worker :(
+### Wage/worker and wage/hour :(
 
 > hard to find good synthetic controls (impossible with europe, acceptable with GE+NL+BE in 30km, bad with point)
 
@@ -1095,7 +1098,80 @@ n2_dta <- main_dta %>%
   # ) %>%
   ungroup()
 
-out_n2 <- gsynth(wage_per_day ~ is_announced +  unempR_T  + gdp_eur_hab,
+out_n2 <- gsynth(wage_per_hour ~ is_announced_2y + pop_total,
+               data = n2_dta,
+               index = c("geo","time"),
+               na.rm = TRUE, # remove
+               force = "two-way", # unit or time fixed effects or both?
+               # CV = TRUE,
+               r = c(0, 3), # an integer specifying the number of factors. If CV = TRUE, the cross validation procedure will select the optimal number of factors from r to 5.
+               se = TRUE,
+               EM = TRUE, # Gobillon and Magnac (takes a lot of time)
+               # inference = "parametric",
+               # estimator = "mc",
+               nboots = 200,  #500
+               parallel = TRUE, cores = 5, # if do parallel and how many cores
+               min.T0 = 5) # Has to be larger than r.max+1
+
+out_n2 %>% print()
+plot(out_n2)#, ylim = c(-5000, 2000))
+
+# plot all data:
+plot(out_n2, type = "counterfactual",
+     raw = "all", main="") # Why the final dip
+
+
+# We can also add two 5 to 95% quantile bands of the treated and control outcomes as references to make sure the estimated counterfactuals are not results of severe extrapolations.
+
+plot(out_n2, type = "counterfactual",
+     raw = "band", xlab = "Time",
+     # ylim = c(-5,35),
+     theme.bw = TRUE)
+
+for (i in n2_dta[n2_dta$treated_uz == TRUE, ]$geo %>% unique()){
+  plot(out_n2, type = "counterfactual", id = i) # Berlin
+}
+
+plot(out_n2, type = "raw", theme.bw = TRUE)
+
+plot(out_n2, type = "loadings")
+plot(out_n2, type = "factors")
+n2_dta
+```
+
+### Hours/worker :(
+
+> hard to find good synthetic controls (impossible with europe, acceptable with GE+NL+BE in 30km, bad with point)
+
+> Doubt if I should report it...
+
+```{r}
+n2_dta <- main_dta %>%
+
+  # filter(!(geo %in% c("DE92", "DE30", "DED5"))) %>%
+
+  filter(treated_uz | contr_restr_30km) %>%
+  
+  filter(country %in% c("DE", "NL", "BE")) %>%
+  filter(!(country %in% c("ES", "EL", "PT", "PL", "TR"))) %>%
+  # # filter(!(geo %in% not_optimal_treated)) %>%
+  # group_by(geo) %>%
+  # filter(
+  #   # mean(wages_per_worker, na.rm = TRUE) < ,
+  #   mean(wages_per_worker, na.rm = TRUE) > 10000
+  # ) %>%
+  #   filter(mean(unempR_T, na.rm = TRUE) < 20) %>%
+  # filter(
+  #   mean(inv_per_worker, na.rm = TRUE) < 25000,
+  #   # mean(inv_per_worker, na.rm = TRUE) > 5000
+  # ) %>%
+  # filter(
+  #   # mean(gdp_eur_hab, na.rm = TRUE) < 65000,
+  #   mean(gdp_eur_hab, na.rm = TRUE) > 5000
+  # ) %>%
+  ungroup()
+
+out_n2 <- gsynth(hours_per_worker ~ is_announced_2y,
                data = n2_dta,
                index = c("geo","time"),
                na.rm = TRUE, # remove
@@ -1457,9 +1533,9 @@ n3_dta <- dta_analysis %>%
   
   filter(!(geo %in% c("DE713"))) %>%
   
-  filter(treated_uz | contr_restr_30km) %>%
+  filter(treated_uz | contr_restr_60km) %>%
   # filter(pop_km2 > 200) %>%  #avoid rural areas
-  filter(country %in% c("DE", "NL", "BE")) %>%
+  filter(country %in% c("DE", "NL", "BE", "AT")) %>%
   filter(!(country %in% c("ES", "EL", "PT", "PL", "TR"))) %>%
   group_by(geo) %>%
   filter(mean(gdp_eur_hab, na.rm = TRUE) < 100000) %>%
@@ -1522,7 +1598,264 @@ plot(out_n3, type = "loadings")
 plot(out_n3, type = "factors")
 ```
 
+##### Latent Factors
 
+```{r}
+out_n3$factor # factors in time
+out_n3$lambda.co %>% as_tibble(rownames = "geo") -> fact_control
+out_n3$lambda.tr %>% as_tibble(rownames = "geo") -> fact_treated
+
+fact_control$treatment <- "control"
+fact_treated$treatment <- "treated"
+
+fact <- rbind(fact_control, fact_treated)
+fact 
+
+ggplot() +
+  geom_point(data = fact, aes(x = r1, y = r2, 
+                              color = treatment)) +
+  theme(text = element_text(size=20), legend.position="none") +   #remove the legend 
+  annotate("text", x = fact$r1, y=fact$r2, label = fact$geo, 
+           hjust = 1, colour = "purple")
+
+# investigate first factor
+
+donor_pool_factor <- nuts_treated %>%
+  filter(LEVL_CODE == 3) %>%
+  left_join(fact, by = c("NUTS_ID" = "geo")) %>%
+  filter(!is.na(treatment))
+
+donor_pool_factor
+
+leaflet() %>% addTiles() %>%
+  addPolygons(data = donor_pool_factor, 
+              weight = 0.5, color = "black",
+              fillColor = ~colorQuantile("RdYlGn",
+                      donor_pool_factor$r1)(donor_pool_factor$r1),
+              popup = paste0(
+                "<b>", donor_pool$NUTS_ID, " ; ", 
+                donor_pool$LEZ, "</b> <br/>",
+                "<b> Factor 1 </b>", donor_pool_factor$r1, "<br/>",
+                "<b> Factor 2 </b>", donor_pool_factor$r2, "<br/>")
+              )
+
+
+
+n3_dta %>%
+  filter(geo %in% c("DE211", "DE243", "DE252")) %>%
+  select(geo, nuts_name) %>% unique()
+```
+
+
+
+##### Maps
+
+```{r}
+# Know the donor pool of each treated:
+weights_result <- out_n3$wgt.implied %>% 
+  as_tibble(rownames = "NUTS_ID")
+
+donor_pool <- nuts_treated %>%
+  filter(LEVL_CODE == 3) %>%
+  left_join(weights_result) %>%
+  filter(!is.na(DEA5A))
+
+donor_pool %>% as.data.frame() %>%
+  select(NUTS_ID, DEA5A, DEE03) %>%
+  arrange(desc(DEE03))
+
+
+leaflet() %>% addTiles() %>%
+  addPolygons(data = donor_pool, weight = 0.5, color = "black",
+              fillColor = ~colorQuantile("RdYlGn",
+                      donor_pool$DEA5A)(donor_pool$DEA5A),
+              popup = paste0(
+                "<b>", donor_pool$NUTS_ID, "</b> <br/>",
+                "<b> Weight Siegen (rural) </b>", donor_pool$DEA5A, "<br/>",
+                "<b> Weight Magdeburg (outside Berlin) </b>", donor_pool$DEE03, "<br/>")
+              )
+```
+
+#### Effects on relative sector Employment
+
+> Restricting after sep 2009, DENLBE, 30km: DE713 has very bad control
+
+* Restricting after sep 2009, 60km
+  +  c("DE713", "DE714", "DEA1C", "DEE03", "DE11C") have very bad control.
+  + DEA18 has a VERY STRONG effect
+
+> REVIEW DEA33
+
+```{r}
+n3_dta <- dta_analysis %>%
+  
+  # Bad controls (pre treatment path)
+  filter(!(geo %in% c("DE713", "DE714", "DEA1C", 
+                      "DEE03", "DE11C"))) %>%
+  
+  # Incredibly high effect, no reason probable
+  filter(!(geo %in% c("DEA18"))) %>%
+  
+  filter(treated_uz | contr_restr_60km) %>%
+  # filter(pop_km2 > 200) %>%  #avoid rural areas
+  filter(country %in% c("DE", "NL", "BE", "AT")) %>%
+  filter(!(country %in% c("ES", "EL", "PT", "PL", "TR"))) %>%
+  group_by(geo) %>%
+  filter(mean(empl_rate_retail, na.rm = TRUE) < 0.08) %>%
+  # filter(
+  #   # mean(wages_per_worker, na.rm = TRUE) < ,
+  #   mean(wages_per_worker, na.rm = TRUE) > 10000
+  # ) %>%
+  ungroup()
+
+# Minimum pop density in sample and in treated
+n3_dta$pop_km2 %>% summary()
+n3_dta[n3_dta$treated_uz == TRUE, ]$pop_km2 %>% summary()
+
+out_n3 <- gsynth(empl_rate_retail ~ is_announced,
+               data = n3_dta, 
+               index = c("geo","time"), 
+               na.rm = TRUE, # remove 
+               force = "two-way", # unit or time fixed effects or both?
+               # CV = TRUE, 
+               r = c(0, 4), # an integer specifying the number of factors. If CV = TRUE, the cross validation procedure will select the optimal number of factors from r to 5.
+               se = TRUE, 
+               EM = TRUE, # Gobillon and Magnac (takes a lot of time)
+               # inference = "parametric",
+               # estimator = "mc",
+               nboots = 200,  #500
+               parallel = TRUE, cores = 5, # if do parallel and how many cores
+               min.T0 = 6) # Has to be larger than r.max+1
+
+out_n3 %>% print()
+plot(out_n3)#, ylim = c(-5000, 2000))
+
+# plot all data:
+plot(out_n3, type = "counterfactual", 
+     raw = "all", main="") # Why the final dip
+
+
+# We can also add two 5 to 95% quantile bands of the treated and control outcomes as references to make sure the estimated counterfactuals are not results of severe extrapolations.
+
+plot(out_n3, type = "counterfactual", 
+     raw = "band", xlab = "Time", 
+     # ylim = c(-5,35),
+     theme.bw = TRUE)
+
+for (i in n3_dta[n3_dta$treated_uz == TRUE, ]$geo %>% unique()){
+  if (i %in% out_n3$id.tr){
+    temp <- plot(out_n3, type = "counterfactual", id = i)
+    print(temp + 
+            geom_vline(xintercept = n3_dta[n3_dta$geo == i,
+                                           ]$year_stage1[1]) + 
+            geom_vline(xintercept = n3_dta[n3_dta$geo == i,
+                                           ]$year_stage2[1]) + 
+            geom_vline(xintercept = n3_dta[n3_dta$geo == i,
+                                           ]$year_stage3[1]))
+  }
+}
+
+plot(out_n3, type = "raw", theme.bw = TRUE)
+
+plot(out_n3, type = "loadings")
+plot(out_n3, type = "factors")
+```
+
+#### Effects on "productivity" (GDP/worker)
+
+> Restricting after sep 2009, DENLBE, 30km: DE713 has very bad control
+
+* Restricting after sep 2009, 
+  + 60km DE713 DE724 DEB35 DEA22 DEA33 have very bad control.
+  + .
+
+
+```{r}
+# # Million euros/tousand workers = thousand euros/w
+dta_analysis <- dta_analysis %>% 
+  mutate(gdp_per_worker = gdp_mio_eur/empl_TOTAL) 
+
+dta_analysis %>% 
+  select(geo, time, gdp_per_worker, gdp_mio_pps, empl_TOTAL)
+```
+
+
+```{r}
+n3_dta <- dta_analysis %>%
+  
+  # Bad controls (pre treatment path)
+  filter(!(geo %in% c("DE713", "DE724", "DEB35",
+                      "DEA22", "DEA33"))) %>%
+  # 
+  # # Incredibly high effect, no reason probable
+  # filter(!(geo %in% c(""))) %>%
+  
+  filter(treated_uz | contr_restr_60km) %>%
+  # filter(pop_km2 > 200) %>%  #avoid rural areas
+  filter(country %in% c("DE", "NL", "BE", "AT")) %>%
+  filter(!(country %in% c("ES", "EL", "PT", "PL", "TR"))) %>%
+  group_by(geo) %>%
+  # filter(mean(empl_rate_retail, na.rm = TRUE) < 0.08) %>%
+  # filter(
+  #   # mean(wages_per_worker, na.rm = TRUE) < ,
+  #   mean(wages_per_worker, na.rm = TRUE) > 10000
+  # ) %>%
+  ungroup()
+
+# Minimum pop density in sample and in treated
+n3_dta$pop_km2 %>% summary()
+n3_dta[n3_dta$treated_uz == TRUE, ]$pop_km2 %>% summary()
+
+out_n3 <- gsynth(gdp_per_worker ~ is_announced,
+               data = n3_dta, 
+               index = c("geo","time"), 
+               na.rm = TRUE, # remove 
+               force = "two-way", # unit or time fixed effects or both?
+               # CV = TRUE, 
+               r = c(0, 4), # an integer specifying the number of factors. If CV = TRUE, the cross validation procedure will select the optimal number of factors from r to 5.
+               se = TRUE, 
+               EM = TRUE, # Gobillon and Magnac (takes a lot of time)
+               # inference = "parametric",
+               # estimator = "mc",
+               nboots = 200,  #500
+               parallel = TRUE, cores = 5, # if do parallel and how many cores
+               min.T0 = 6) # Has to be larger than r.max+1
+
+out_n3 %>% print()
+plot(out_n3)#, ylim = c(-5000, 2000))
+
+# plot all data:
+plot(out_n3, type = "counterfactual", 
+     raw = "all", main="") # Why the final dip
+
+
+# We can also add two 5 to 95% quantile bands of the treated and control outcomes as references to make sure the estimated counterfactuals are not results of severe extrapolations.
+
+plot(out_n3, type = "counterfactual", 
+     raw = "band", xlab = "Time", 
+     # ylim = c(-5,35),
+     theme.bw = TRUE)
+
+for (i in n3_dta[n3_dta$treated_uz == TRUE, ]$geo %>% unique()){
+  if (i %in% out_n3$id.tr){
+    temp <- plot(out_n3, type = "counterfactual", id = i)
+    print(temp + 
+            geom_vline(xintercept = n3_dta[n3_dta$geo == i,
+                                           ]$year_stage1[1]) + 
+            geom_vline(xintercept = n3_dta[n3_dta$geo == i,
+                                           ]$year_stage2[1]) + 
+            geom_vline(xintercept = n3_dta[n3_dta$geo == i,
+                                           ]$year_stage3[1]))
+  }
+}
+
+plot(out_n3, type = "raw", theme.bw = TRUE)
+
+plot(out_n3, type = "loadings")
+plot(out_n3, type = "factors")
+```
+
+## Maps
 
 ```{r}
 maps_n3_de <- nuts_treated %>%

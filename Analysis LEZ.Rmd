@@ -359,10 +359,11 @@ umweltzonen %>% dim()
 um <- umweltzonen %>%
   mutate(Stage_1 = as.Date(Stage_1, "%d.%m.%Y"),
          Stage_2 = as.Date(Stage_2, "%d.%m.%Y"),
-         Stage_3 = as.Date(Stage_3, "%d.%m.%Y"))
+         Stage_3 = as.Date(Stage_3, "%d.%m.%Y"),
+         Announcment = as.Date(Announcment))
 
 all <- expand.grid(LEZ = um$LEZ, 
-                   year = seq(2008, 2020),
+                   year = seq(2007, 2018),
                    month = seq(01, 12), 
                    # month = c("01", "02", "03", "04", "05", "06",
                    #          "07", "08", "09", "10", "11", "12"), 
@@ -373,25 +374,41 @@ panel_zones <- all %>%
   mutate(date = as.POSIXct(paste0(year,"-", month, "-01" )),
          # LEZ = substr(LEZ, 1, 24),
          LEZ = sub(" *\\(.*", "", LEZ), # Everything until a "("
-         status = ifelse(date < Stage_1, 0,
-                          if_else(date < Stage_2, 1, 
-                                  if_else(date < Stage_3, 2, 3, 
-                                          missing = 2)))
+         # If i don't have the date of announcemnt I do as if there were none
+         Announcment = if_else(is.na(Announcment), Stage_1, Announcment),
+         status = case_when(
+           date <= Announcment ~ 0,
+           date <= Stage_1 ~ 1,
+           date <= Stage_2 ~ 2,
+           date <= Stage_3 ~ 3,
+           date > Stage_3 ~ 4,
+           is.na(Stage_3) ~ 3,
+           is.na(Announcment) ~ 0,
+           # date < Stage_1
+           TRUE ~ 0
+         )
+         # status = if_else(date < Announcment, 0, missing = 0,
+         #                 if_else(date < Stage_1, 1,
+         #                         if_else(date < Stage_2, 2, 
+         #                                 if_else(date < Stage_3, 3, 4, 
+         #                                         missing = 3))))
          # date_factor = paste0(year(date), "-", ifelse(
          #   month(date)<9, paste0("0", month(date)), month(date))),
          ) %>%
   arrange(Stage_3) %>%
   arrange(Stage_2) %>%
   arrange(Stage_1) %>%
+  arrange(Announcment) %>%
   mutate(LEZ_factor = fct_inorder(LEZ)) %>%
   select(LEZ, date, status, year, month, LEZ_factor)
-panel_zones
+
+panel_zones %>% head()
 ```
 
 
 
-```{r, fig.height=8, fig.width= 9}
-# png(filename = "LEZ application germany.png", 
+```{r, fig.height=8, fig.width= 7.5}
+# png(filename = "images/LEZ application germany_2.png",
 #     width = 750, height = 1000, res = 100)
 panelView(month ~ status, data = panel_zones, 
           index = c("LEZ_factor", "date"), 
@@ -400,16 +417,29 @@ panelView(month ~ status, data = panel_zones,
           # axis.lab = "time",
           background = "white",
           main = "",
-          xlab = "", ylab = "", pre.post = TRUE,
-          legend.labs = c("No LEZ applied", 
-                          "Only red, yellow or green sticker", 
+          xlab = "", ylab = "",
+          na.rm = FALSE,
+          pre.post = TRUE,
+          legend.labs = c("No LEZ applied", "LEZ announced", 
+                          "Red, yellow or green sticker", 
                           "Only yellow or green sticker", "Only green stiker"),
-          color = c("grey90", "red1", "yellow1", "green4"))
+          color = c("grey90", "grey60", "red1", "yellow1", "green4")) +
+  annotate("rect", xmin = 0, xmax=Inf, ymin=32.5, ymax=Inf,
+                              alpha = 0.6, fill='white') +
+  annotate("rect", xmin = 0, xmax=Inf, ymin=0.5, ymax=4.5,
+                              alpha = 0.6, fill='white') +
+  # geom_hline(yintercept = 26.5, size = 3, color = "white" ) +
+  # geom_vline(xintercept = 33, size = 2) + #as.Date("01-09-2009", "%d-%m-%Y"))
+  geom_segment(x = 33, xend = 33, y = 4.5, yend = 32.5, size = 1.5) +
+  geom_segment(x = 12*10, xend = 12*10, y = 4.5, yend = 32.5, size = 1.5) 
+  # geom_vline(xintercept = 12*10, size = 2) 
 # dev.off()
 
 # devtools::install_github('xuyiqing/panelView')
 # RColorBrewer::brewer.pal.info
 ```
+
+> NOTE! I NEED TO FIND THE DATE OF ANOUNCEMT OF THE MISSING LEZ!
 
 (Image saved in png file)
 

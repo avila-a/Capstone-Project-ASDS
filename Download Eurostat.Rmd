@@ -278,6 +278,11 @@ _NOTE: France and Poland have MISSING_
 down_eurostat("nama_10r_2emhrw") -> emp_h_workN2
 
 write.csv(emp_h_workN2, "data/eurostat/hours_worked_nuts2.csv")
+
+# emp_h_workN2 %>%
+#   # filter(substr(geo, 1, 2) == "DE") %>%
+#   filter(geo == "BG34")
+  
 ```
 
 

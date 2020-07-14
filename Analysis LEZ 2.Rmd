@@ -290,6 +290,7 @@ main_dta <- nuts_treated %>%
 main_dta %>% names()
 main_dta %>% head()
 
+
 # saveRDS(main_dta, "data/main_dta.rds")
 ```
 

@@ -335,6 +335,8 @@ hours_n2 <- hours_n2 %>%
 
 
 hours_n2 %>% head()
+
+hours_n2 %>% filter(geo == "BG34")
 ```
 
 
@@ -502,6 +504,10 @@ nuts_time <- all_geo %>%
 # To look at the merge in a year all variables are available
 nuts_time %>%
   filter(time == 2016) %>% head(80)
+
+nuts_time %>%
+  filter(geo == "BG34") %>%
+  select(time, hours_TOTAL)
 
 nuts_time %>% is.na() %>% colSums() %>% as.data.frame()
 
