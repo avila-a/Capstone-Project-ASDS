@@ -531,7 +531,7 @@ dbWriteTable(db, "nuts_time",
 ```
 
 
-## Include data from umweltbundesamt:
+## Include Umweltbundesamt:
 
 ### Treatment variables
 

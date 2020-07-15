@@ -483,10 +483,14 @@ get_buffer_km <- function(data_points, km){
     st_transform(crs = "+proj=longlat +datum=WGS84")
 }
 
-buffer_60_uar <- get_buffer_km(uar_sf, 60)
+buffer_80_uar <- get_buffer_km(uar_sf, 60)
 
 # ! Note! I don't need to do a buffer of 50 and 100 km of small (city-center) urban access regulations.
 # I could restrict to do this for sizable LEZ
+
+# # Create a DB of centroids of NUTS regions
+# nuts.sf_centroid <- nuts.sf %>% st_centroid()
+# nuts.sf_centroid
 
 nuts.sf <- nuts.sf %>%
   mutate(
@@ -507,7 +511,7 @@ nuts.sf <- nuts.sf %>%
     with_uar_60km = ifelse(
       NUTS_ID %in% 
         (st_intersection(
-          nuts.sf, get_buffer_km(uar_sf, 60))$NUTS_ID %>%
+          nuts.sf_centroid, get_buffer_km(uar_sf, 60))$NUTS_ID %>%
            unique()),
       TRUE, FALSE),
     
@@ -559,6 +563,20 @@ ggplot(nuts.sf %>%
   geom_sf(aes(color = as.factor(LEVL_CODE))) +
   geom_sf(data = buffer_60_uar) +
   geom_sf(data = umweltzonen)
+  # geom_sf(data = nuts.sf_centroid, color = "red", size = 0.2)
+
+# leaflet() %>% 
+#   addTiles() %>%
+#   addPolygons(data = nuts.sf %>%
+#                 filter(with_uar_80km == FALSE),
+#               weight = 4, col = "red") %>%
+#   addPolygons(data = buffer_80_uar, col = "green") %>%
+#   addCircleMarkers(data = nuts.sf_centroid, 
+#              # clusterOptions = markerClusterOptions(),
+#               popup = paste0(
+#                 "<b>", nuts.sf_centroid$NUTS_ID, "</b> <br/>",
+#                 "<b> Name: </b>", 
+#                 nuts.sf_centroid$NUTS_NAME, "<br/>"))
 ```
 
 
@@ -905,7 +923,7 @@ temp_treated <- nuts.sf.treated %>%
          LEVL_CODE == 3)
 
 temp_control <- nuts.sf.treated %>%
-  filter(contr_restr_30km == TRUE,
+  filter(contr_restr_60km == TRUE,
          LEVL_CODE == 3)
 
 treated_and_controls <- leaflet() %>% 

@@ -363,7 +363,7 @@ um <- umweltzonen %>%
          Announcment = as.Date(Announcment))
 
 all <- expand.grid(LEZ = um$LEZ, 
-                   year = seq(2007, 2018),
+                   year = seq(2007, 2017),
                    month = seq(01, 12), 
                    # month = c("01", "02", "03", "04", "05", "06",
                    #          "07", "08", "09", "10", "11", "12"), 
@@ -376,14 +376,17 @@ panel_zones <- all %>%
          LEZ = sub(" *\\(.*", "", LEZ), # Everything until a "("
          # If i don't have the date of announcemnt I do as if there were none
          Announcment = if_else(is.na(Announcment), Stage_1, Announcment),
+         
          status = case_when(
-           date <= Announcment ~ 0,
-           date <= Stage_1 ~ 1,
-           date <= Stage_2 ~ 2,
-           date <= Stage_3 ~ 3,
-           date > Stage_3 ~ 4,
+           date <= Announcment ~ 0, # not applied
+           date <= Stage_1 ~ 1, # announced
+           date <= Stage_2 ~ 2, # stage 1
+           # If they don't have a stage 2 then they stayed in 1
+           is.na(Stage_2) ~ 2,
+           date <= Stage_3 ~ 3, #stage 2
            is.na(Stage_3) ~ 3,
-           is.na(Announcment) ~ 0,
+           date > Stage_3 ~ 4, #stage 3
+           # is.na(Announcment) ~ 0,
            # date < Stage_1
            TRUE ~ 0
          )
@@ -409,7 +412,7 @@ panel_zones %>% head()
 
 ```{r, fig.height=8, fig.width= 7.5}
 # png(filename = "images/LEZ application germany_2.png",
-#     width = 750, height = 1000, res = 100)
+    # width = 750, height = 1000, res = 100)
 panelView(month ~ status, data = panel_zones, 
           index = c("LEZ_factor", "date"), 
           by.timing = TRUE, 
@@ -424,15 +427,20 @@ panelView(month ~ status, data = panel_zones,
                           "Red, yellow or green sticker", 
                           "Only yellow or green sticker", "Only green stiker"),
           color = c("grey90", "grey60", "red1", "yellow1", "green4")) +
-  annotate("rect", xmin = 0, xmax=Inf, ymin=32.5, ymax=Inf,
-                              alpha = 0.6, fill='white') +
-  annotate("rect", xmin = 0, xmax=Inf, ymin=0.5, ymax=4.5,
-                              alpha = 0.6, fill='white') +
-  # geom_hline(yintercept = 26.5, size = 3, color = "white" ) +
-  # geom_vline(xintercept = 33, size = 2) + #as.Date("01-09-2009", "%d-%m-%Y"))
-  geom_segment(x = 33, xend = 33, y = 4.5, yend = 32.5, size = 1.5) +
-  geom_segment(x = 12*10, xend = 12*10, y = 4.5, yend = 32.5, size = 1.5) 
-  # geom_vline(xintercept = 12*10, size = 2) 
+  # Black vertical segments (+.5 because the graph starts at 1)
+  geom_segment(x = 33.5, xend = 33.5, y = 2.5, yend = 32.5, size = 1.5) +
+  # geom_segment(x = 12*10, xend = 12*10, y = 4.5, yend = 32.5, size = 1.5) 
+  # geom_vline(xintercept = 33, size = 2) + 
+  # geom_vline(xintercept = 12*10, size = 1.5)
+
+  # White shading areas 
+  # annotate("rect", xmin = 0, xmax=Inf, ymin=32.5, ymax=Inf,
+  #                             alpha = 0.6, fill='white') +
+  # annotate("rect", xmin = 0, xmax=Inf, ymin=0.5, ymax=4.5,
+  #                             alpha = 0.6, fill='white') +
+  annotate("rect", xmin = 1, xmax=Inf, ymin=2.5, ymax=32.5,
+           alpha = 0.6, color = "red", 
+           fill = NA, size = 1.5)
 # dev.off()
 
 # devtools::install_github('xuyiqing/panelView')

@@ -836,19 +836,16 @@ https://ec.europa.eu/environment/air/cleaner_air/
 ### Small analysis of the application of LEZ zones in Germany:
 
 ```{r}
-
-
-```
-
-```{r}
 umweltzonen <- dbGetQuery(db, "SELECT * from umweltzonen")
+
 um <- umweltzonen %>%
   mutate(Stage_1 = as.Date(Stage_1, "%d.%m.%Y"),
          Stage_2 = as.Date(Stage_2, "%d.%m.%Y"),
-         Stage_3 = as.Date(Stage_3, "%d.%m.%Y"))
+         Stage_3 = as.Date(Stage_3, "%d.%m.%Y"),
+         Announcment = as.Date(Announcment))
 
 all <- expand.grid(LEZ = um$LEZ, 
-                   year = seq(2008, 2020),
+                   year = seq(2006, 2018),
                    month = seq(01, 12), 
                    # month = c("01", "02", "03", "04", "05", "06",
                    #          "07", "08", "09", "10", "11", "12"), 
@@ -859,20 +856,127 @@ panel_zones <- all %>%
   mutate(date = as.POSIXct(paste0(year,"-", month, "-01" )),
          # LEZ = substr(LEZ, 1, 24),
          LEZ = sub(" *\\(.*", "", LEZ), # Everything until a "("
-         status = ifelse(date < Stage_1, 0,
-                          if_else(date < Stage_2, 1, 
-                                  if_else(date < Stage_3, 2, 3, 
-                                          missing = 2)))
+         # If i don't have the date of announcemnt I do as if there were none
+         Announcment = if_else(is.na(Announcment), Stage_1, Announcment),
+         
+         status = case_when(
+           date <= Announcment ~ 0, # not applied
+           date <= Stage_1 ~ 1, # announced
+           date <= Stage_2 ~ 2, # stage 1
+           # If they don't have a stage 2 then they stayed in 1
+           is.na(Stage_2) ~ 2,
+           date <= Stage_3 ~ 3, #stage 2
+           is.na(Stage_3) ~ 3,
+           date > Stage_3 ~ 4, #stage 3
+           # is.na(Announcment) ~ 0,
+           # date < Stage_1
+           TRUE ~ 0
+         )
+         # status = if_else(date < Announcment, 0, missing = 0,
+         #                 if_else(date < Stage_1, 1,
+         #                         if_else(date < Stage_2, 2, 
+         #                                 if_else(date < Stage_3, 3, 4, 
+         #                                         missing = 3))))
          # date_factor = paste0(year(date), "-", ifelse(
          #   month(date)<9, paste0("0", month(date)), month(date))),
          ) %>%
   arrange(Stage_3) %>%
   arrange(Stage_2) %>%
   arrange(Stage_1) %>%
+  arrange(Announcment) %>%
   mutate(LEZ_factor = fct_inorder(LEZ)) %>%
   select(LEZ, date, status, year, month, LEZ_factor)
-panel_zones
+
+panel_zones %>% head()
 ```
+
+
+
+```{r, fig.height=8, fig.width= 7.5}
+# png(filename = "images/LEZ application germany_2.png",
+    # width = 780, height = 1000, res = 100)
+pv_timeline <- panelView(month ~ status, data = panel_zones, 
+          index = c("LEZ_factor", "date"), 
+          by.timing = TRUE, 
+          axis.lab.gap = c(23,0), 
+          # axis.lab = "time",
+          background = "white",
+          main = "",
+          xlab = "", ylab = "",
+          na.rm = FALSE,
+          pre.post = TRUE,
+          legend.labs = c("No LEZ applied", "LEZ announced", 
+                          "Red, yellow or green sticker", 
+                          "Only yellow or green sticker", 
+                          "Only green stiker"),
+          color = c("grey90", "grey60", "red1", 
+                    "yellow1", "green4")) 
+
+pv_timeline +
+  # # Black vertical segments (+.5 because the graph starts at 1)
+  # geom_segment(x = 33.5, xend = 33.5, y = 2.5, yend = 31.5, 
+  #              size = 1.5) +
+  geom_segment(x = 33.5+12, xend = 33.5+12, y = 31.5, yend = Inf, 
+               size = 1.5) +
+  geom_segment(x = 12*12, xend = 12*12, y = 0.5, yend = 2.5, 
+               size = 1.5) +
+  # geom_vline(xintercept = 33, size = 2) + 
+  # geom_vline(xintercept = 12*10, size = 1.5)
+
+  # White shading areas 
+  # annotate("rect", xmin = 0, xmax=Inf, ymin=32.5, ymax=Inf,
+  #                             alpha = 0.6, fill='white') +
+  # annotate("rect", xmin = 0, xmax=Inf, ymin=0.5, ymax=4.5,
+  #                             alpha = 0.6, fill='white') +
+  # Black-shading year markers
+  annotate("rect", xmin = 0.5, xmax=1.5, ymin=0.5, ymax=Inf,
+           alpha = 0.2,
+           fill = "black", size = 1.5) +
+  annotate("rect", xmin = 12.5, xmax=13.5, ymin=0.5, ymax=Inf,
+           alpha = 0.2,
+           fill = "black", size = 1.5) +
+  annotate("rect", xmin = 12*1 + 0.5, xmax=12*1 + 1.5, 
+           ymin=0.5, ymax=Inf,
+           alpha = 0.2,
+           fill = "black", size = 1.5) +
+  annotate("rect", xmin = 12*2 + 0.5, xmax=12*2 + 1.5, 
+           ymin=0.5, ymax=Inf,
+           alpha = 0.2,
+           fill = "black", size = 1.5) +
+  annotate("rect", xmin = 12*3 + 0.5, xmax=12*3 + 1.5, 
+           ymin=0.5, ymax=Inf,
+           alpha = 0.2,
+           fill = "black", size = 1.5) +
+  # red square
+  annotate("rect", xmin = 1, xmax=Inf, ymin=2.5, ymax=31.5,
+           alpha = 0.6, color = "red", 
+           fill = NA, size = 1.5) +
+  # Text
+  geom_curve(aes(x = 8*12-4, y = 40, xend = 33.5+12, yend = 34), 
+             colour = "black", 
+             size=1, 
+             curvature = -0.2,
+             arrow = arrow(length = unit(0.03, "npc"))
+             ) +
+  geom_label(aes(x = 8*12-4, y = 40, 
+                 label = "End of Scrappage Program"), 
+             hjust = 0, 
+             vjust = 0.5, 
+             colour = "black", 
+             fill = "white",
+             # label.size = NA, 
+             # family="Helvetica", 
+             size = 5)
+
+# dev.off()
+
+# devtools::install_github('xuyiqing/panelView')
+# RColorBrewer::brewer.pal.info
+```
+
+> NOTE! I NEED TO FIND THE DATE OF ANOUNCEMT OF THE MISSING LEZ!
+
+(Image saved in png file)
 
 
 
