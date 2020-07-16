@@ -893,8 +893,7 @@ panel_zones %>% head()
 
 
 ```{r, fig.height=8, fig.width= 7.5}
-# png(filename = "images/LEZ application germany_2.png",
-    # width = 780, height = 1000, res = 100)
+
 pv_timeline <- panelView(month ~ status, data = panel_zones, 
           index = c("LEZ_factor", "date"), 
           by.timing = TRUE, 
@@ -911,6 +910,9 @@ pv_timeline <- panelView(month ~ status, data = panel_zones,
                           "Only green stiker"),
           color = c("grey90", "grey60", "red1", 
                     "yellow1", "green4")) 
+
+png(filename = "images/LEZ application germany_3.png",
+    width = 780, height = 1000, res = 100)
 
 pv_timeline +
   # # Black vertical segments (+.5 because the graph starts at 1)
@@ -932,9 +934,6 @@ pv_timeline +
   annotate("rect", xmin = 0.5, xmax=1.5, ymin=0.5, ymax=Inf,
            alpha = 0.2,
            fill = "black", size = 1.5) +
-  annotate("rect", xmin = 12.5, xmax=13.5, ymin=0.5, ymax=Inf,
-           alpha = 0.2,
-           fill = "black", size = 1.5) +
   annotate("rect", xmin = 12*1 + 0.5, xmax=12*1 + 1.5, 
            ymin=0.5, ymax=Inf,
            alpha = 0.2,
@@ -947,19 +946,55 @@ pv_timeline +
            ymin=0.5, ymax=Inf,
            alpha = 0.2,
            fill = "black", size = 1.5) +
+  annotate("rect", xmin = 12*4 + 0.5, xmax=12*4 + 1.5, 
+           ymin=0.5, ymax=Inf,
+           alpha = 0.2,
+           fill = "black", size = 1.5) +
+  annotate("rect", xmin = 12*5 + 0.5, xmax=12*5 + 1.5, 
+           ymin=0.5, ymax=Inf,
+           alpha = 0.2,
+           fill = "black", size = 1.5) +
+  annotate("rect", xmin = 12*6 + 0.5, xmax=12*6 + 1.5, 
+           ymin=0.5, ymax=Inf,
+           alpha = 0.2,
+           fill = "black", size = 1.5) +
+  annotate("rect", xmin = 12*7 + 0.5, xmax=12*7 + 1.5, 
+           ymin=0.5, ymax=Inf,
+           alpha = 0.2,
+           fill = "black", size = 1.5) +
+  annotate("rect", xmin = 12*8 + 0.5, xmax=12*8 + 1.5, 
+           ymin=0.5, ymax=Inf,
+           alpha = 0.2,
+           fill = "black", size = 1.5) +
+  annotate("rect", xmin = 12*9 + 0.5, xmax=12*9 + 1.5, 
+           ymin=0.5, ymax=Inf,
+           alpha = 0.2,
+           fill = "black", size = 1.5) +
+    annotate("rect", xmin = 12*10 + 0.5, xmax=12*10 + 1.5, 
+           ymin=0.5, ymax=Inf,
+           alpha = 0.2,
+           fill = "black", size = 1.5) +
+    annotate("rect", xmin = 12*11 + 0.5, xmax=12*11 + 1.5, 
+           ymin=0.5, ymax=Inf,
+           alpha = 0.2,
+           fill = "black", size = 1.5) +
+    annotate("rect", xmin = 12*12 + 0.5, xmax=12*12 + 1.5, 
+           ymin=0.5, ymax=Inf,
+           alpha = 0.2,
+           fill = "black", size = 1.5) +
   # red square
   annotate("rect", xmin = 1, xmax=Inf, ymin=2.5, ymax=31.5,
            alpha = 0.6, color = "red", 
            fill = NA, size = 1.5) +
   # Text
-  geom_curve(aes(x = 8*12-4, y = 40, xend = 33.5+12, yend = 34), 
+  geom_curve(aes(x = 8*12-4, y = 42, xend = 33.5+12, yend = 34), 
              colour = "black", 
              size=1, 
              curvature = -0.2,
              arrow = arrow(length = unit(0.03, "npc"))
              ) +
-  geom_label(aes(x = 8*12-4, y = 40, 
-                 label = "End of Scrappage Program"), 
+  geom_label(aes(x = 8*12-4, y = 42, 
+                 label = "End of Scrappage\n Program"), 
              hjust = 0, 
              vjust = 0.5, 
              colour = "black", 
@@ -968,7 +1003,7 @@ pv_timeline +
              # family="Helvetica", 
              size = 5)
 
-# dev.off()
+dev.off()
 
 # devtools::install_github('xuyiqing/panelView')
 # RColorBrewer::brewer.pal.info
