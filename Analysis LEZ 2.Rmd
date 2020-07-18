@@ -1003,7 +1003,12 @@ pv_timeline +
              # family="Helvetica", 
              size = 5)
 
-dev.off()
+# dev.off()
+
+# png(filename = "images/LEZ application germany_clean.png",
+#     width = 780, height = 1000, res = 100)
+# pv_timeline
+# dev.off()
 
 # devtools::install_github('xuyiqing/panelView')
 # RColorBrewer::brewer.pal.info
