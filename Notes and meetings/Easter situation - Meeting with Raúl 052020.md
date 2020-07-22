@@ -142,25 +142,26 @@ Possible Solutions:
 
 ```mermaid
 stateDiagram
-        Econ_and_Geo_determinants --> productivity
-        Econ_and_Geo_determinants --> GDP
+        #Econ_and_Geo_determinants --> productivity
+        #Econ_and_Geo_determinants --> GDP
         #Econ_and_Geo_determinants --> employment
-        pollution --> productivity : ---
-        pollution --> mortality_or_emigration : +++
-        absentism --> productivity : ---
-        congestion --> productivity : ---
-        Labour --> GDP : (+++) 
-        mortality_or_emigration --> Labour : ---
-        productivity --> Labour : +++
-        employment --> Labour : +++
-        productivity --> employment : ???
-        Econ_and_Geo_determinants --> pollution
-        LEZ --> pollution : ---
-        LEZ --> GDP : Other econ effects, (---)
-        pollution --> absentism : +++? Dependency ratio
-        Econ_and_Geo_determinants --> LEZ
-        LEZ --> employment : ???
-        LEZ --> congestion : ---
+        pollution --> productivity : Negative
+        pollution --> mortality_or_emigration : +
+        absentism --> Labour : Negative
+        congestion --> productivity : Negative
+        Labour --> GDP : + 
+        mortality_or_emigration --> Labour : Negative
+        productivity --> Labour : +
+        #employment --> Labour : +
+        #productivity --> employment : ???
+        #Econ_and_Geo_determinants --> pollution
+        LEZ --> pollution : Nagative
+        LEZ --> Other_econ_outcomes : Negative?
+        Other_econ_outcomes --> GDP : +
+        pollution --> absentism : +
+        #Econ_and_Geo_determinants --> LEZ
+        #LEZ --> employment : ???
+        LEZ --> congestion : Negative
         #LEZ --> Costs
         #LEZ --> Profits
         #Profits --> K

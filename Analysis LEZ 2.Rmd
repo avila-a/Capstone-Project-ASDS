@@ -184,13 +184,25 @@ nuts_time <- nuts_time %>%
 nuts_time <- nuts_time %>%
   mutate(empl_rate_agriculture = empl_A/empl_TOTAL,
          empl_rate_industry = `empl_B-E`/empl_TOTAL,
-         empl_rate_retail = `empl_F`/empl_TOTAL, # Wholesale and retail trade, transport, accommodation and food service activities
+         empl_rate_construction = `empl_F`/empl_TOTAL, 
+         empl_rate_local_trade = `empl_G-I`/empl_TOTAL,# Wholesale and retail trade, transport, accommodation and food service activities
          empl_rate_financial = `empl_K`/empl_TOTAL,
          empl_rate_realstate = `empl_L`/empl_TOTAL,
          empl_rate_professional = `empl_M_N`/empl_TOTAL,
          empl_rate_public = `empl_O-Q`/empl_TOTAL,
          empl_rate_entretainment = `empl_R-U`/empl_TOTAL)
 
+nuts_time <- nuts_time %>%
+  mutate(gva_rate_agriculture = gva_A/gva_tot,
+         gva_rate_industry = `gva_B_E`/gva_tot,
+         gva_rate_construction = `gva_F`/gva_tot, 
+         gva_rate_local_trade = `gva_G_J`/gva_tot,#  Wholesale and retail trade, transport, accommodation and food service activities
+         gva_rate_work = `gva_K_N`/gva_tot,
+         gva_rate_public = `gva_O_U`/gva_tot)
+
+nuts_time %>%
+  filter(substr(geo, 1, 2) == "DE") %>%
+  select(geo, time, `gva_rate_work`, gva_tot, gva_rate_public)
 
 # Educational level/capita (nuts 2)
 # Dependency ratio (NUTS 2)

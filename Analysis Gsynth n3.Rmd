@@ -183,8 +183,8 @@ main_dta %>%
 ```
 
 ```{r}
-main_dta %>%
-  is.na() %>% colSums()
+# main_dta %>%
+#   is.na() %>% colSums()
 
 main_dta$is_announced_4y %>% table()
 ```
@@ -570,6 +570,9 @@ for (i in n3_dta[n3_dta$treated_uz == TRUE, ]$geo %>% unique()){
     # width = 3.5, height = 3.1)
     print(temp + 
             geom_vline(xintercept = n3_dta[n3_dta$geo == i,
+                                           ]$year_announced[1], 
+                       color = "grey80") + 
+            geom_vline(xintercept = n3_dta[n3_dta$geo == i,
                                            ]$year_stage1[1], 
                        color = "red1") + 
             geom_vline(xintercept = n3_dta[n3_dta$geo == i,
@@ -608,6 +611,12 @@ fact_ggplot <- plot(out_n2, type = "factors",
 #        x = "Year")
 # dev.off()
 ```
+
+> Magdeburg suffered from floods in 2013: Wikipedia +
+> Was one of the most dynamic cities until 2011: https://www.welt.de/wirtschaft/article111642974/Magdeburg-ist-dynamischste-deutsche-Grossstadt.html
+> Heidenheim: "Around 560 jobs in Germany and Austria are to be cut by the end of September 2014." (after big reduction and not related with environental zones https://www.stuttgarter-nachrichten.de/inhalt.voith-in-heidenheim-hunderte-jobs-in-papiersparte-fallen-weg.29833f08-24a8-4646-9f7c-70527e975c58.html)
+> No major news on the economy for Heidenheim
+
 
 ### 4. (extended)
 
@@ -671,26 +680,34 @@ Regarding factor loadings:
 for (i in n3_dta[n3_dta$treated_uz == TRUE, ]$geo %>% unique()){
   if (i %in% out_n2$id.tr){
     # print(i)
+    # pdf(file=paste0("images/prelim_results/ind_real_eff",
+    #               "_",  i, ".pdf"),
+    # width = 3.5, height = 3.1)
     plot_i <- out_n2$est.ind[, ,i] %>%
       as.tibble(rownames = "rel_time") %>%
-      mutate(rel_time = as.numeric(rel_time)) %>%
+      mutate(rel_time = 2010 + as.numeric(rel_time)) %>%
       ggplot(aes(x= rel_time, y = EFF, group = 1)) +
       geom_ribbon(aes(ymin = CI.lower, ymax = CI.upper),
-                  alpha = 0.6) +
+                  alpha = 0.3) +
       geom_line() +
-      geom_vline(xintercept = 0) +
+      geom_vline(xintercept = n3_dta[n3_dta$geo == i,]$year_announced[1]) +
       geom_hline(yintercept = 0) +
       labs(
         title = paste0(i, " - " ,n3_dta[n3_dta$geo == i,]$LEZ[1]),
-        x = "Time relative to Announcment",
+        x = "Year",
         y = "GDP per capita (€)"
       )
     print(plot_i)
+    # dev.off()
   }
 }
 ```
 
 > Cities that have a negative impact are those where LEZ impact a significant proportion of the urban area of the zone and there is none very close LEZ already applied.
+
+> Magdeburg was flooded (on 2013 so only part of the effect can be "negatively biased" 
+
+> Heiderberg has a sizable proportion of the popultion of the area. https://en.wikipedia.org/wiki/Heidenheim_(district)
 
 #### Maps
 
@@ -843,7 +860,7 @@ tm_shape(osm_units) +
 
 > note! The synthetic control specifically finds small and big urban areas, the restrictions limit all cities from NL, (the north), and only 1 NUTS from belgium and from Austria is used.
 
- ### 4. R. Un+co+Not_optimal
+### 5. R. Un+co+Not_optimal
 
 * Filter countries that have strong shocks of unemployment -> YES https://data.worldbank.org/indicator/SL.UEM.TOTL.NE.ZS?locations=DE-ES-GR-PL-NL-PT-LU-CZ-HU
 * Filter regions -> YES
@@ -1206,7 +1223,9 @@ non_treated <- c("DEB21", "DEB3A",
 
 fake_tr_dta <- main_dta %>%
   # treated (fake controls) or "non-treated" (fake treated)
-  filter(treated_uz | geo %in% non_treated)
+  filter(treated_uz | geo %in% non_treated) %>%
+  # Remove all "treated" NUTS3 regions that are not representative of their cities
+  filter( !(geo %in% not_optimal_treated))
 
 # Select placebo year of announcment / or implementation
 year_start_policy <- 2010
@@ -1223,7 +1242,9 @@ fake_tr_dta <- fake_tr_dta %>%
                      "DE273", "DE222", "DE233",
                      "DEB3A", 
                      "DEF01", "DEF02", "DEF03",
-                     "DE945"))
+                     "DE945")) %>%
+  # Filter treated that have a confounding factor (Magdeburg)
+  filter(geo != "DEE03")
 
 fake_tr_dta <- fake_tr_dta %>% 
   # take all cities that announced that year and the control
@@ -1300,6 +1321,8 @@ plot(out_n2, type = "raw", theme.bw = TRUE)
 plot(out_n2, type = "loadings")
 plot(out_n2, type = "factors")
 ```
+
+> Possible to create placebos with bad treated regions (not representative) but impossible to do it without them.
 
 ##### Real Inver
 
@@ -1411,7 +1434,7 @@ ggplot(data = weights_treated_pool) +
              size = 2) +
   coord_flip() +
   labs(
-    y = "Weight",
+    y = "Implied Weight",
     x = "Non-treated Region"
   )
 ```
@@ -1426,7 +1449,7 @@ for (i in fake_tr_dta_real[fake_tr_dta_real$treated_uz == FALSE, ]$geo %>% uniqu
       mutate(rel_time = as.numeric(rel_time)+2000) %>%
       ggplot(aes(x= rel_time, y = -EFF, group = 1)) +
       geom_ribbon(aes(ymin = -CI.lower, ymax = -CI.upper),
-                  alpha = 0.6) +
+                  alpha = 0.3) +
       geom_line() +
       geom_vline(xintercept = 2010) +
       geom_hline(yintercept = 0) +
@@ -1460,7 +1483,10 @@ non_treated <- c("DEB21", "DEB3A",
 
 fake_tr_dta <- main_dta %>%
   # treated (fake controls) or "non-treated" (fake treated)
-  filter(treated_uz | geo %in% non_treated)
+  filter(treated_uz | geo %in% non_treated) %>%
+  # Remove all "treated" NUTS3 regions that are not representative of their cities
+  filter( !(geo %in% not_optimal_treated))
+
 
 # Select placebo year of announcment / or implementation
 year_start_policy <- 2011
@@ -1468,7 +1494,8 @@ year_start_policy <- 2011
 fake_tr_dta <- fake_tr_dta %>%
 # filter those regions that  do have a good synthetic treated
 # 2011
-filter((geo %in% c("DED41", "DE402", "DEF03")) | treated_uz)
+filter((geo %in% c("DED41", "DE402", "DEF03")) | treated_uz) %>%   # Filter treated that have a confoundeing factor (Magdeburg)
+  filter(geo != "DEE03")
 
 fake_tr_dta <- fake_tr_dta %>% 
   # take all cities that announced that year and the control
@@ -1540,7 +1567,7 @@ for (i in fake_tr_dta[!is.na(fake_tr_dta$year_announced), ]$geo %>% unique()){
     plot(out_n2, type = "counterfactual", id = i,
          xlim = c(2000, fake_tr_dta[fake_tr_dta$geo == i,
                                            ]$year_announced[1]-1),
-         main = "",
+         # main = "",
          xlab = "Year",
          ylab = "PIB per capita (€)"
          )
@@ -1619,16 +1646,16 @@ out_n2$est.att %>%
 for (i in fake_tr_dta[!is.na(fake_tr_dta$year_announced), ]$geo %>%
      unique()){
   if (i %in% out_n2$id.tr){
-    pdf(file=paste0("images/prelim_results/ind_inverse_real",
-                    "_",  i, ".pdf"),
-        width = 3.5, height = 2.7)
+    # pdf(file=paste0("images/prelim_results/ind_inverse_real",
+    #                 "_",  i, ".pdf"),
+    #     width = 3.5, height = 2.7)
     temp <- plot(out_n2, type = "counterfactual", id = i,
                  main = "",
                  # main = paste0("Control and Synthetic T (",i, ")"),
                  xlab = "Year",
                  ylab = "PIB per capita (€)"
     )
-    dev.off()
+    # dev.off()
     # print(temp + scale_fill_discrete(limits=c("2", "0.5")))
   }
 }
@@ -1665,17 +1692,18 @@ weights_treated_pool <- weights_treated_pool %>%
   mutate(value_std = (value-mean(value))/sd(value)) %>%
   ungroup()
 
-pdf(file=paste0("images/prelim_results/inverse_2011_weights.pdf"),
-    width = 5.5, height = 2.5)
+# pdf(file=paste0("images/prelim_results/inverse_2011_weights.pdf"),
+#     width = 5.5, height = 2.5)
 ggplot(data = weights_treated_pool) +
-  geom_point(aes(x = name_control, y = value_std, color = name_treated),
+  geom_point(aes(x = name_control, y = value, color = name_treated),
              size = 3) +
   coord_flip() +
   labs(
-    y = "Weight (standarized)",
+    y = "Implied Weight",
     x = "Non-treated region"
-  ) 
-dev.off()
+  ) +
+  scale_color_discrete(name = "Treated Pool")
+# dev.off()
 
 
 # +  geom_text(aes(x = name_control, y = value_std, 
@@ -1689,16 +1717,16 @@ dev.off()
 ```{r}
 for (i in fake_tr_dta_real[fake_tr_dta_real$treated_uz == FALSE, ]$geo %>% unique()){
   if (i %in% out_n2$id.tr){
-    pdf(file=paste0("images/prelim_results/ind_inverse_real_eff",
-                    "_",  i, ".pdf"),
-        width = 4, height = 2.7)
+    # pdf(file=paste0("images/prelim_results/ind_inverse_real_eff",
+    #                 "_",  i, ".pdf"),
+        # width = 4, height = 2.7)
     plot_i <- out_n2$est.ind[, ,i] %>%
       as.tibble(rownames = "rel_time") %>%
       mutate(rel_time = as.numeric(rel_time)+2000) %>%
       ggplot(aes(x= rel_time, y = -EFF, group = 1)) +
       geom_ribbon(aes(ymin = -CI.lower, ymax = -CI.upper),
-                  alpha = 0.6) +
-      geom_line() +
+                  alpha = 0.2) +
+      geom_line(size = 1.5) +
       geom_vline(xintercept = 2010) +
       geom_hline(yintercept = 0) +
       labs(
@@ -1717,6 +1745,478 @@ for (i in fake_tr_dta_real[fake_tr_dta_real$treated_uz == FALSE, ]$geo %>% uniqu
 * It is possible to create a good synthetic control even with a 60km buffer of every region.
 * It NEEDS time fixed effects (because of the finantial crisis)
 * Unit fixed effects are very useful and can be controled by restricting the overall values of the outcome. Not having unit fixed effects decreases the credibility of the synthetic method.
+
+## Share of GDP
+
+### Retail
+
+
+### pre-treatment placebo (4y)
+
+Do first analysis (look for good pre-treatment placebo):
+
+
+#### 4. Only G
+
+* Only Germany as controls
+* Filter regions -> YES
+* 60km buffer arround each city center
+* Filter regions with high unemployment rates that are not compatiable if I am using fixed effects by region. -> YES
+
+```{r}
+n3_dta <- main_dta %>%
+  # restrict to NUTS with good synthetic controls
+  filter(geo %in% c(
+    "DE143", "DEA1C", "DEE02", "DE724", "DEE03", "DE113", "DE115", "DE143") | treated_uz == FALSE) %>%
+  
+  filter(treated_uz | contr_restr_60km) %>%
+  # filter(country == "DE") %>%
+  filter(country %in% c("DE",
+                        "NL", "BE", "AT",
+                        "SE", "NO", "FI"
+                        )) %>%
+  # filter(!(country %in% c("EL", "ES", "PT"))) %>% #,"PL", "TR")))
+  # filter(!(geo %in% not_optimal_treated)) %>%
+  group_by(geo) %>%
+  filter(
+    mean(gdp_eur_hab, na.rm = TRUE) < 75000,
+    mean(gdp_eur_hab, na.rm = TRUE) > 15000
+  ) %>%
+  #   filter(
+  #   mean(gva_rate_retail, na.rm = TRUE) < 0.08,
+  # ) %>%
+  ungroup()
+  
+# Minimum pop density in sample and in treated
+n3_dta$pop_km2 %>% summary()
+n3_dta[n3_dta$treated_uz == TRUE, ]$pop_km2 %>% summary()
+
+n3_dta <- n3_dta %>%
+  filter(pop_km2 > 100) #avoid rural areas
+
+out_n2 <- gsynth(gva_rate_retail ~ is_announced_4y, #+ pop_km2 + pop_total,
+               data = n3_dta, 
+               index = c("geo","time"), 
+               na.rm = TRUE, # remove NA
+               force = "time", # unit or time fixed effects or both?
+               # CV = TRUE, 
+               r = c(0,2), # an integer specifying the number of factors. If CV = TRUE, the cross validation procedure will select the optimal number of factors from r to 5.
+               se = TRUE,
+               EM = TRUE, # Gobillon and Magnac (takes a lot of time)
+               inference = "parametric",
+               # estimator = "mc",
+               nboots = 300,  #500
+               parallel = TRUE, cores = 5, # if do parallel and how many cores
+               min.T0 = 6) # Has to be larger than r.max+1
+
+out_n2 %>% print()
+out_n2$Nco
+out_n2$Ntr
+
+# pdf(file="images/prelim_results/placeboATT.pdf",
+#     width = 4, height = 3)
+plot(out_n2, #ylim = c(-2000, 2000), 
+     xlim = c(-8, 4), 
+     main = "",
+     ylab = "Mean difference in GDP/capita (€)")
+# dev.off()
+
+# plot all data:
+plot(out_n2, type = "counterfactual", 
+     raw = "all", main = "") # Why the final dip
+
+
+# We can also add two 5 to 95% quantile bands of the treated and control outcomes as references to make sure the estimated counterfactuals are not results of severe extrapolations.
+
+plot(out_n2, type = "counterfactual", 
+     raw = "band", xlab = "Time", 
+     # ylim = c(-5,35),
+     theme.bw = TRUE)
+
+for (i in n3_dta[n3_dta$treated_uz == TRUE, ]$geo %>% unique()){
+  # pdf(file=paste0("images/prelim_results/ind_placebo",
+  #                 "_",  i, ".pdf"),
+  #   width = 3.5, height = 3.1)
+  plot(out_n2, type = "counterfactual", id = i, 
+       xlim = c(2000, n3_dta[n3_dta$geo == i,
+                                           ]$year_announced[1]-1),
+       main = paste0(
+         # n3_dta[n3_dta$geo == i,]$LEZ[1], 
+                       " and SC", " - ",
+                     n3_dta[n3_dta$geo == i,]$geo[1]),
+       sub = "Pre-intervention placebo of 3 years",
+       xlab = "Year") 
+  # dev.off()
+}
+
+
+plot(out_n2, type = "raw", theme.bw = TRUE)
+
+plot(out_n2, type = "loadings")
+plot(out_n2, type = "factors")
+out_n2$lambda.tr
+```
+
+Now that I have restricted the sameple to those cities which I can create a Synthetic control y do the results:
+
+### 4. Outcome
+
+```{r}
+n3_dta <- main_dta %>%
+  
+  # Treated that have good synths or controls
+  filter(geo %in% out_n2$id.tr | !treated_uz ) %>%
+
+  filter(treated_uz | contr_restr_60km) %>%
+  # filter(country == "DE") %>%
+  filter(country %in% c("DE",
+                        "NL", "BE", "AT",
+                        "SE", "NO", "FI"
+                        )) %>%
+  # filter(!(country %in% c("EL", "ES", "PT"))) %>% #,"PL", "TR")))
+  # filter(!(geo %in% not_optimal_treated)) %>%
+  group_by(geo) %>%
+  filter(
+    mean(gdp_eur_hab, na.rm = TRUE) < 75000,
+    mean(gdp_eur_hab, na.rm = TRUE) > 15000
+  ) %>%
+  ungroup()
+  
+# Minimum pop density in sample and in treated
+n3_dta$pop_km2 %>% summary()
+n3_dta[n3_dta$treated_uz == TRUE, ]$pop_km2 %>% summary()
+
+n3_dta <- n3_dta %>%
+  filter(pop_km2 > 100) #avoid rural areas
+
+out_n2 <- gsynth(gva_rate_retail ~ is_announced,
+               data = n3_dta, 
+               index = c("geo","time"), 
+               na.rm = TRUE, # remove NA
+               force = "time", # unit or time fixed effects or both?
+               # CV = TRUE, 
+               r = c(0, 3), # an integer specifying the number of factors. If CV = TRUE, the cross validation procedure will select the optimal number of factors from r to 5.
+               se = TRUE, 
+               EM = TRUE, # Gobillon and Magnac (takes a lot of time)
+               inference = "parametric",
+               # estimator = "mc",
+               nboots = 300,  #500
+               parallel = TRUE, cores = 5, # if do parallel and how many cores
+               min.T0 = 6) # Has to be larger than r.max+1
+
+out_n2 %>% print()
+out_n2$Nco
+out_n2$Ntr
+
+# pdf(file="images/prelim_results/realATT.pdf",
+#     width = 3.5, height = 3.1)
+plot(out_n2) # ylim = c(-3500, 3500))
+# dev.off()
+
+# plot all data:
+plot(out_n2, type = "counterfactual", 
+     raw = "all", main="") # Why the final dip
+
+
+# We can also add two 5 to 95% quantile bands of the treated and control outcomes as references to make sure the estimated counterfactuals are not results of severe extrapolations.
+
+plot(out_n2, type = "counterfactual", 
+     raw = "band", xlab = "Time", 
+     # ylim = c(-5,35),
+     theme.bw = TRUE)
+
+for (i in n3_dta[n3_dta$treated_uz == TRUE, ]$geo %>% unique()){
+  if (i %in% out_n2$id.tr){
+    temp <- plot(out_n2, type = "counterfactual", id = i)
+    # pdf(file=paste0("images/prelim_results/ind_real",
+    #               "_",  i, ".pdf"),
+    # width = 3.5, height = 3.1)
+    print(temp + 
+            geom_vline(xintercept = n3_dta[n3_dta$geo == i,
+                                           ]$year_announced[1], 
+                       color = "grey80") + 
+            geom_vline(xintercept = n3_dta[n3_dta$geo == i,
+                                           ]$year_stage1[1], 
+                       color = "red1") + 
+            geom_vline(xintercept = n3_dta[n3_dta$geo == i,
+                                           ]$year_stage2[1], 
+                       color = "yellow1") + 
+            geom_vline(xintercept = n3_dta[n3_dta$geo == i,
+                                           ]$year_stage3[1], 
+                       color = "green4") +
+      labs(
+        title = paste0(n3_dta[n3_dta$geo == i,]$LEZ[1], 
+                       " and SC"),
+        y = "GDP per capita (€)",
+        x  = "Year"
+      )
+    )
+    # dev.off()
+  }
+}
+
+plot(out_n2, type = "raw", theme.bw = TRUE)
+
+
+# pdf(file="images/prelim_results/f_loadings.pdf",
+#     width = 5, height = 4)
+plot(out_n2, type = "loadings", main = "")
+# dev.off()
+
+
+# pdf(file="images/prelim_results/factors_time.pdf",
+#     width = 4, height = 3)
+fact_ggplot <- plot(out_n2, type = "factors", 
+                    main = "",
+                    xlab = "Year")
+# fact_ggplot +
+#   labs(title = "",
+#        x = "Year")
+# dev.off()
+```
+
+
+### 4. (extended)
+
+#### Support for predictors
+
+```{r}
+panelView(pop_km2 ~ is_announced, data = n3_dta,  
+          index = c("geo","time"), type = "outcome")
+
+panelView(gdp_eur_hab ~ is_announced, data = n3_dta,  
+          index = c("geo","time"), type = "outcome") 
+```
+
+#### Factor analysis
+
+```{r}
+# Know the donor pool of each treated:
+weights_result <- out_n2$wgt.implied %>% 
+  as_tibble(rownames = "NUTS_ID")
+
+# temp <- n2_dta %>%
+#   left_join(weights_result, by = c("geo" = "NUTS_ID")) %>%
+#   # filter(treated_uz == TRUE)
+#   filter(geo == "DE30" | !(is.na(DE30))) %>%
+#   filter(time >= 2000 & time <= 2008) %>%
+#   group_by(geo == "DE30", time) %>%
+#   mutate(DE30 = DE30-mean(DE30)/sd(DE30)) %>%
+#   mutate(DE30 = ifelse(geo == "DE30", mean(DE30, na.rm = TRUE), DE30)) %>%
+#   dplyr::summarise(mean_unem = weighted.mean(gdp_eur_hab, 
+#                                              DE30, na.rm = TRUE))
+# # %>%
+# #   pivot_wider(id_cols = time, names_from = `geo == "DE30"`,
+# #               values_from = mean_unem)
+# 
+#   select(geo, time, DE30, unempR_T); temp
+# temp
+# temp %>%
+#   ggplot() +
+#   geom_line(aes(x= time, y = mean_unem, color = `geo == "DE30"`))
+# 
+# out_n2$lambda.co # estimated loadings of each factor
+out_n2$lambda.tr # estimated loadings of each factor
+# out_n2$wgt.implied
+# 
+# MASS::ginv(t(as.matrix(out_n2$lambda.tr)))
+plot(out_n2, type = "factors", theme.bw = TRUE)
+plot(out_n2, type = "loadings")
+```
+
+Regarding factors' evolution:
+
+"Bearing in mind the caveat that estimated factors may not be directly interpretable because they are, at best, linear transformations of the true factors, we find that the estimated factors shown in this figure are meaningful. The first factor captures the sharp increase in turnout in the southern states because of the 1965 Voting Rights Act that removed Jim Crow laws, such as poll taxes or literacy tests, that suppressed turnout."
+
+Regarding factor loadings:
+
+"Another reassuring finding shown by Figure 3b is that the estimated factor loadings of the nine treated units mostly lie in the convex hull of those of the control units, which indicates that the treated counterfactuals are produced mostly by more reliable interpolations instead of extrapolations." (paper Gsynth)
+
+#### Individual effects and SE:
+
+```{r}
+for (i in n3_dta[n3_dta$treated_uz == TRUE, ]$geo %>% unique()){
+  if (i %in% out_n2$id.tr){
+    # print(i)
+    # pdf(file=paste0("images/prelim_results/ind_real_eff",
+    #               "_",  i, ".pdf"),
+    # width = 3.5, height = 3.1)
+    plot_i <- out_n2$est.ind[, ,i] %>%
+      as.tibble(rownames = "rel_time") %>%
+      mutate(rel_time = 2010 + as.numeric(rel_time)) %>%
+      ggplot(aes(x= rel_time, y = EFF, group = 1)) +
+      geom_ribbon(aes(ymin = CI.lower, ymax = CI.upper),
+                  alpha = 0.3) +
+      geom_line() +
+      geom_vline(xintercept = n3_dta[n3_dta$geo == i,]$year_announced[1]) +
+      geom_hline(yintercept = 0) +
+      labs(
+        title = paste0(i, " - " ,n3_dta[n3_dta$geo == i,]$LEZ[1]),
+        x = "Year",
+        y = "GDP per capita (€)"
+      )
+    print(plot_i)
+    # dev.off()
+  }
+}
+```
+
+> Cities that have a negative impact are those where LEZ impact a significant proportion of the urban area of the zone and there is none very close LEZ already applied.
+
+> Magdeburg was flooded (on 2013 so only part of the effect can be "negatively biased" 
+
+> Heiderberg has a sizable proportion of the popultion of the area. https://en.wikipedia.org/wiki/Heidenheim_(district)
+
+#### Maps
+
+```{r}
+# Know the donor pool of each treated:
+weights_result <- out_n2$wgt.implied %>% 
+  as_tibble(rownames = "NUTS_ID")
+
+donor_pool <- nuts_treated %>%
+  filter(LEVL_CODE == 3) %>%
+  left_join(weights_result) %>%
+  filter(!is.na(DEE03))
+
+# osm_units <- tmaptools::read_osm(donor_pool, ext=1.1)
+
+donor_pool %>% as.data.frame() %>%
+  select(NUTS_ID, DEE03) %>%
+  arrange(desc(DEE03))
+
+# # Map of donor pools
+# leaflet() %>% addTiles() %>%
+#   addPolygons(data = donor_pool, weight = 0.5, color = "black",
+#               fillColor = ~colorQuantile("RdYlGn",
+#                       donor_pool$DE713)(donor_pool$DE713),
+#               popup = paste0(
+#                 "<b>", donor_pool$NUTS_ID, "</b> <br/>",
+#                 "<b> Weight Berlin </b>", donor_pool$DE713, "<br/>",
+#                 "<b> Weight Hannover </b>", donor_pool$DE713, "<br/>")
+#               )
+
+# Map of treated regions that were evaluated
+nuts_treated %>%
+  filter(NUTS_ID %in% out_n2$id.tr) %>%
+  leaflet() %>% addTiles() %>%
+  addPolygons()
+
+tm_shape(osm_units) +
+  tm_rgb() +
+  tm_shape(nuts_treated %>%
+             filter(NUTS_ID %in% out_n2$id.tr)) +
+  tm_polygons( col = "red") 
+
+# MAP of factors
+
+factor_weights <- rbind(out_n2$lambda.co, out_n2$lambda.tr) %>%
+  as.tibble(rownames = "NUTS_ID") %>%
+  mutate_if(is.numeric, function(x){(x-mean(x))/sd(x)})
+
+factor_weights <- nuts_treated %>%
+  right_join(factor_weights) %>%
+  select(NUTS_ID, r1, r2, r3) %>%
+  rename(c("Factor 1" = r1, "Factor 2" = r2, "Factor 3" = r3))
+
+
+
+# # Factor 1, Rural - VS - Urban "economy" (or more gdp_capita) 
+
+tm_shape(osm_units) +
+  tm_rgb() +
+  tm_shape(factor_weights) +
+  tm_polygons(col = "Factor 1") +
+  tm_layout(legend.bg.color = "white")
+
+# leaflet() %>% addTiles() %>%
+#   addPolygons(data = factor_weights, 
+#               weight = 0.5, 
+#               color = "black",
+#               fillColor = ~colorQuantile("RdYlGn",
+#                       factor_weights$r1)(factor_weights$r1),
+#               popup = paste0(
+#                 "<b>", factor_weights$NUTS_ID, "</b> <br/>",
+#                 "<b> Weight 1 </b>", 
+#                 factor_weights$r1, "<br/>",
+#                 "<b> Weight 2 </b>", 
+#                 factor_weights$r2, "<br/>",
+#                 "<b> Weight 3 </b>", 
+#                 factor_weights$r3, "<br/>")
+#               )
+
+# Investigate factor 1 and it's relation with GDP_capita
+outcome_means <- apply(cbind(out_n2$Y.tr, out_n2$Y.co), 2, mean) %>%
+  as.tibble(rownames = "NUTS_ID")
+
+# pdf(file="images/prelim_results/factor_1_gdp.pdf",
+#     width = 3, height = 4)
+factor_weights %>%
+  left_join(outcome_means) %>% as.data.frame() %>%
+  ggplot() +
+  geom_point(aes(x = `Factor 1`, y = value)) +
+  labs(x = "Factor 1", y = "Mean prop. GVA (€)")
+# dev.off()
+
+# # Factor 2 ¿ Center germany VS hanburg + Duserldof + Stuttgart?
+
+# pdf(file="images/prelim_results/factor_2_map.pdf",
+#     width = 3, height = 4)
+tm_shape(osm_units) +
+  tm_rgb() +
+  tm_shape(factor_weights) +
+  tm_polygons(col = "Factor 2") +
+  tm_layout(legend.bg.color = "white")
+# dev.off()
+
+# leaflet() %>% addTiles() %>%
+#   addPolygons(data = factor_weights, 
+#               weight = 0.5, 
+#               color = "black",
+#               fillColor = ~colorQuantile("RdYlGn",
+#                       factor_weights$r2)(factor_weights$r2),
+#               popup = paste0(
+#                 "<b>", factor_weights$NUTS_ID, "</b> <br/>",
+#                 "<b> Weight 1 </b>", 
+#                 factor_weights$r1, "<br/>",
+#                 "<b> Weight 2 </b>", 
+#                 factor_weights$r2, "<br/>",
+#                 "<b> Weight 3 </b>", 
+#                 factor_weights$r3, "<br/>")
+              # )
+
+
+## Factor 3 ??? NO IDEA
+
+# pdf(file="images/prelim_results/factor_3_map.pdf",
+#     width = 3, height = 4)
+tm_shape(osm_units) +
+  tm_rgb() +
+  tm_shape(factor_weights) +
+  tm_polygons(col = "Factor 3") +
+  tm_layout(legend.bg.color = "white")
+# dev.off()
+
+
+# leaflet() %>% addTiles() %>%
+#   addPolygons(data = factor_weights, 
+#               weight = 0.5, 
+#               color = "black",
+#               fillColor = ~colorQuantile("RdYlGn",
+#                       factor_weights$r3)(factor_weights$r3),
+#               popup = paste0(
+#                 "<b>", factor_weights$NUTS_ID, "</b> <br/>",
+#                 "<b> Weight 1 </b>", 
+#                 factor_weights$r1, "<br/>",
+#                 "<b> Weight 2 </b>", 
+#                 factor_weights$r2, "<br/>",
+#                 "<b> Weight 3 </b>", 
+#                 factor_weights$r3, "<br/>")
+#               )
+  
+```
+
+> note!: (to do)
 
 
 ## Outcomes!

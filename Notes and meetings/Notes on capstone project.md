@@ -1,4 +1,4 @@
-Notes on capstone project
+# :heavy_check_mark: Notes on capstone project
 
 
 
@@ -138,34 +138,40 @@ CLEAN DATA, SUMMARY STATISTICS
   - [x] NUTS 3 in the same NUTS 2 region
   - [ ] Are they going to change in time? (dynamic set of controls?) NO
   - [x] Discard Rhrine-Ruhr area as a control
-- [ ] Create a **list of possible controls** for each treated city
-  - [ ] Bound overall differences in levels of predictive variables pre-intervention (maximum and minimum)
-    - [ ] Restrict big relative or absolute differences in controls?
-    - [ ] Remove "rural" NUTS regions? (or those with different pop densities?)
-    - [ ] Remove very south-european / meditarranian economies?
-  - [x] Restrict cities outside 50-100km of a LEZ AND outside the same NUTS2 region (+ unite the Rhine-Ruhr area)
+- [x] Create a **list of possible controls** for each outcome (before each treated city)
+  - [x] Bound overall differences in levels of predictive variables pre-intervention (maximum and minimum)
+    - [x] :heavy_check_mark: Restrict big relative or absolute differences in controls?
+    - [x] :heavy_check_mark: Remove "rural" NUTS regions? (or those with different pop densities?)
+    - [x] :heavy_check_mark: Remove very south-european / meditarranian economies?
+  - [x] :heavy_check_mark: ​ Restrict cities outside 60 km of a LEZ 
 - [x] Review it is ready for analysis (clean and meaningful)
   - [x] Re-run code to get data from Eurostat
 
 INTERMEDIATE TASK
 
-- [ ] Pull together a **sketch of the outline** and skeleton of the ideas on how to structure the paper with small resumes or ideas for him to criticize.
+- [x] Pull together a **sketch of the outline** and skeleton of the ideas on how to structure the paper with small resumes or ideas for him to criticize.
 
 START ANALYSIS
 
 - [x] Do Synthetic Control for some cities and each outcome
   - [x] First check which combination of controls reduce pre-treatment RMSE and choose accordingly
-  - [ ] Do robustness checks:
-    - [ ] Sizable effect: check pre and post (RMSE)
-    - [ ] Check if restricting controls further changes results (SUTVA)
-    - [ ] No anticipation: do various pre-intervention placebo tests (maybe try the announcement/implementation of the first LEZ)
+  - [x] Do robustness checks:
+    - [x] :x: Sizable effect: check pre and post (RMSE) -> Dobe By Gobillon/magnac
+    - [x] :heavy_check_mark: Check if restricting controls further changes results (SUTVA)
+    - [x] :heavy_check_mark: No anticipation: do various pre-intervention placebo tests (maybe try the announcement/implementation of the first LEZ)
   - [ ] Try if I can differentiate the effects of different stages of LEZ (ATE for each period?)
 - [ ] Try to perform and include in the final project:
-  - [ ] Try to do MASC
-  - [ ] Try to do a "Inverse" synthetic control for a couple untreated cities (Hamburg being the principal of them)
-  - [ ] Try to create a webpage that displays the methodology, data and results in an interactive way.
-
+  - [x] :x:Try to do MASC
+  - [x] :heavy_check_mark: Try to do a "Inverse" synthetic control for a couple untreated cities (Hamburg being the principal of them)
+  - [x] :x: Try to create a webpage that displays the methodology, data and results in an interactive way.
 - [ ] WRITE the results.
+  - [ ] Summarize data
+    - [ ] Summary of variables
+    - [ ] Data on relative size on LEZ for NUTS regions (population + Economy)
+    - [ ] Actual position of cities in sample, cities already applied and German controls 
+  - [ ] Overall Effect
+  - [ ] Effect on "local commerce"sector (Transport, services, commerce, retail)
+  - [ ] "Inverse" synthetic control method.
 
 
 
