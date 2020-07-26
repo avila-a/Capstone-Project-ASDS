@@ -843,6 +843,17 @@ https://andrewcbaker.netlify.com/2020/01/01/what-can-we-say-about-medical-mariju
 ## How much pollution comes from cars? (and other info from the EC):
 https://ec.europa.eu/environment/air/cleaner_air/
 
+## SUMMARY ST
+
+How many LEZ in Europe?
+
+```{r}
+uar_dta <- read.csv(file = "data/UAR_data/uar.csv")
+
+uar_dta$lez %>% sum(na.rm = TRUE)
+```
+
+
 ## PLOTS:
 
 ### Small analysis of the application of LEZ zones in Germany:
