@@ -919,7 +919,7 @@ nuts.sf.treated %>%
 
 ```{r}
 temp_treated <- nuts.sf.treated %>%
-  filter(treated_any == TRUE,
+  filter(treated_uz == TRUE,
          LEVL_CODE == 3)
 
 temp_control <- nuts.sf.treated %>%
@@ -941,27 +941,28 @@ treated_and_controls <- leaflet() %>%
                 "<b>", temp_control$NUTS_ID, "</b> <br/>",
                 "<b> Name: </b>", 
                 temp_control$NUTS_NAME, "<br/>")) %>%
-  addMarkers(data = umweltzonen,
-             popup = paste0(
-               "<b>", umweltzonen$LEZ, "</b> <br/>",
-               "<b> Start date: </b>", umweltzonen$Stage_1, "<br/>",
-               "<b> Announcment date: </b>",
-               umweltzonen$Announcment, "<br/>",
-               "<b> Source: </b> Umweltzonen")) %>% 
+  # addMarkers(data = umweltzonen,
+  #            popup = paste0(
+  #              "<b>", umweltzonen$LEZ, "</b> <br/>",
+  #              "<b> Start date: </b>", umweltzonen$Stage_1, "<br/>",
+  #              "<b> Announcment date: </b>",
+  #              umweltzonen$Announcment, "<br/>",
+  #              "<b> Source: </b> Umweltzonen")) %>% 
   setView(15, 50, zoom = 3)
 
 # treated_and_controls
 
 htmlwidgets::saveWidget(treated_and_controls,
-                        file="map_tr_and_controls_.html")
+                        file="map_tr_and_controls_nomark.html")
 ```
 
 For NUTS 2
 
 ```{r}
 temp_treated <- nuts.sf.treated %>%
-  filter(treated_any == TRUE,
-         LEVL_CODE == 2)
+  filter(treated_uz == TRUE,
+         LEVL_CODE == 2) 
+  
 
 temp_control <- nuts.sf.treated %>%
   filter(contr_restr_60km == TRUE,

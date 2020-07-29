@@ -441,6 +441,7 @@ n3_dta[n3_dta$treated_uz == TRUE, ]$pop_km2 %>% summary()
 n3_dta <- n3_dta %>%
   filter(pop_km2 > 100) #avoid rural areas
 
+
 out_n2 <- gsynth(gdp_eur_hab ~ is_announced_4y, #+ pop_km2 + pop_total,
                data = n3_dta, 
                index = c("geo","time"), 
@@ -483,14 +484,15 @@ plot(out_n2, type = "counterfactual",
 for (i in n3_dta[n3_dta$treated_uz == TRUE, ]$geo %>% unique()){
   # pdf(file=paste0("images/prelim_results/ind_placebo",
   #                 "_",  i, ".pdf"),
-  #   width = 3.5, height = 3.1)
+    # width = 3.5, height = 3.1)
   plot(out_n2, type = "counterfactual", id = i, 
        xlim = c(2000, n3_dta[n3_dta$geo == i,
                                            ]$year_announced[1]-1),
        # main = paste0(n3_dta[n3_dta$geo == i,]$LEZ[1], 
        #                 " and SC"),
        sub = "Pre-intervention placebo of 3 years",
-       xlab = "Year") 
+       xlab = "Year", ylab = "GDP/capita") 
+  print(i)
   # dev.off()
 }
 
@@ -515,13 +517,14 @@ n3_dta <- main_dta %>%
   filter(treated_uz | contr_restr_60km) %>%
   # filter((treated_uz | contr_restr_point) &
   #          contr_restr_30km == FALSE ) %>% # Effect of non-vehicle change effects
+  filter(!(geo %in% not_optimal_treated)) %>%
+  
   filter(country == "DE") 
   # filter(country %in% c("DE",
   #                       "NL", "BE", "AT",
   #                       "SE", "NO", "FI"
   #                       )) 
   # filter(!(country %in% c("EL", "ES", "PT"))) %>% #,"PL", "TR")))
-  # filter(!(geo %in% not_optimal_treated)) %>%
   
 # Minimum pop density in sample and in treated
 n3_dta$pop_km2 %>% summary()
@@ -536,8 +539,11 @@ n3_dta <- n3_dta %>%
   ) %>%
   ungroup()
 
-# n3_dta <- n3_dta %>%
-#   filter(!(geo == "DEE03" & time >= 2013))
+n3_dta <- n3_dta %>%
+  filter(!(geo == "DEE03" & time >= 2013))
+
+
+# Perform analysis
 
 out_n2 <- gsynth(gdp_eur_hab ~ is_announced,
                data = n3_dta, 
@@ -584,16 +590,16 @@ for (i in n3_dta[n3_dta$treated_uz == TRUE, ]$geo %>% unique()){
     print(temp + 
             geom_vline(xintercept = n3_dta[n3_dta$geo == i,
                                            ]$year_announced[1], 
-                       color = "grey80") + 
+                       color = "grey80", size = 1.5) + 
             geom_vline(xintercept = n3_dta[n3_dta$geo == i,
                                            ]$year_stage1[1], 
-                       color = "red1") + 
+                       color = "red1", size = 1.5) + 
             geom_vline(xintercept = n3_dta[n3_dta$geo == i,
                                            ]$year_stage2[1], 
-                       color = "yellow1") + 
+                       color = "yellow1", size = 1.5) + 
             geom_vline(xintercept = n3_dta[n3_dta$geo == i,
                                            ]$year_stage3[1], 
-                       color = "green4") +
+                       color = "green4", size = 1.5) +
       labs(
         title = paste0(n3_dta[n3_dta$geo == i,]$LEZ[1], 
                        " and SC"),
@@ -623,6 +629,30 @@ fact_ggplot <- plot(out_n2, type = "factors",
 #   labs(title = "",
 #        x = "Year")
 # dev.off()
+
+pdf(file="images/prelim_results/ATT_gdp_cap.pdf",
+    width = 5.5, height = 3)
+out_n2$est.att %>%
+  as_tibble(rownames = "rel_time") %>%
+  mutate(rel_time = as.integer(rel_time)) %>%
+  ggplot(aes(x= rel_time, y = ATT, group = 1)) +
+  geom_segment(x = 0, xend = 0, y = -8000, yend = 1000, 
+               size = 2, color = "grey50") +
+  geom_ribbon(aes(ymin = CI.lower, ymax = CI.upper),
+              alpha = 0.3) +
+  geom_line(size = 1) +
+  geom_text(aes(x= rel_time, y = 1500, label = n.Treated)) +
+  # geom_vline(xintercept = 0) +
+
+  geom_hline(yintercept = 0) +
+  labs(
+    # title = "ATT and number of treated regions",
+    x = "Years after the announcment of a LEZ",
+    y = "Change in GDP per capita (€)"
+  ) +
+  scale_x_continuous(breaks=seq(-8,9,2)) +
+  scale_y_continuous(breaks = seq(-8000, 2000, 2000))
+dev.off()
 ```
 
 > Magdeburg suffered from large floods in 2013: Wikipedia +
@@ -634,6 +664,73 @@ fact_ggplot <- plot(out_n2, type = "factors",
 
 
 ### 4. (extended)
+
+#### Sum Stat
+
+```{r}
+library(stargazer)
+
+dta_for_summary <- n3_dta %>%
+  select(geo, gdp_eur_hab, pop_km2, pop_total, treated_gz,
+         gva_rate_local_trade) %>%
+  group_by(geo) %>%
+  summarise_all(function(x){mean(x, na.rm = TRUE)}) %>%
+  as.data.frame() %>%
+  mutate(treated_summ = ifelse(treated_gz == 1,
+                               yes = "Treated", no = "Control"))
+
+# install.packages("reporttools")  #Use this to install it, do this only once
+require(reporttools)
+
+vars <- dta_for_summary[,c('gdp_eur_hab', "pop_total",
+                           'pop_km2')]
+group <- dta_for_summary[,c('treated_summ')]
+
+## display default statistics, only use a subset of observations, grouped analysis
+
+result <- tableContinuous(vars = vars, group = group, 
+                stats = c("n", "min", "mean", "max", "s"),
+                prec = 1,font.size = "small",
+                # print.pval = "anova",
+                cap = "Summary statistics for effect on GDP/capita",
+                lab = "tab: descr stat gdpcap",
+                longtable = FALSE
+                # file = "Presentations and documents/results/des_gdpcapita.tex"
+                )
+
+cat(gsub("\\\\hline\n[^\n]+& all &[^\n]+\n", "", result))
+```
+
+
+```{r}
+dta_for_summary
+# dta_for_summary %>% stargazer(type = "text")
+
+stargazer(dta_for_summary, type = "text", style = "aer",
+          title="Descriptive statistics", 
+          summary.stat = c("n", "mean", "sd", "min", "max"),
+          digits=2, digits.extra = 1,
+          # decimal.mark = ",",
+          digit.separate = 3
+          # covariate.labels = c(
+          #   "Monitor", "Z-score",
+          #   "PM2.5 μg/m$^3$", "GDP (M dollars/km$^2$)",
+          #   "Pop. density (persons/km$^2$)", 
+          #   "Industry air pol. (T/25km$^2$)", "Reporting Year",
+          #   "First year station", "Last year station",
+          #   "Inaugurated after 2016"
+          # )
+)
+          # out = "results/summ_stats.tex")
+# Add option covariate labels after ordering
+# Add option subset to restrict sample
+# years without comma
+## Notes: https://dss.princeton.edu/training/NiceOutputR.pdf
+## https://www.jakeruss.com/cheatsheets/stargazer/
+dta_for_summary
+
+```
+
 
 #### Support for predictors
 
@@ -672,13 +769,120 @@ weights_result <- out_n2$wgt.implied %>%
 #   ggplot() +
 #   geom_line(aes(x= time, y = mean_unem, color = `geo == "DE30"`))
 # 
-# out_n2$lambda.co # estimated loadings of each factor
+out_n2$lambda.co # estimated loadings of each factor
 out_n2$lambda.tr # estimated loadings of each factor
 # out_n2$wgt.implied
 # 
 # MASS::ginv(t(as.matrix(out_n2$lambda.tr)))
 plot(out_n2, type = "factors", theme.bw = TRUE)
-plot(out_n2, type = "loadings")
+# plot(out_n2, type = "loadings")
+
+# get data on weights
+weights <- out_n2$lambda.co  %>%
+  as_tibble(rownames = "geo") %>%
+  mutate(Group = "Control") %>%
+  rbind(out_n2$lambda.tr %>%
+          as_tibble(rownames = "geo") %>%
+          mutate(Group = "Treated")) %>%
+  mutate_if(is.numeric, function(x){(x-mean(x))/sd(x)})
+
+# Get codes from umweltzonen
+umweltzonen <- readRDS("data/umweltbundesamt/umweltzonen.rds")
+# dbGetQuery(db, "SELECT * from umweltzonen")
+
+um <- umweltzonen %>%
+  mutate(Stage_1 = as.Date(Stage_1, "%d.%m.%Y"),
+         Stage_2 = as.Date(Stage_2, "%d.%m.%Y"),
+         Stage_3 = as.Date(Stage_3, "%d.%m.%Y"),
+         Announcment = as.Date(Announcment)) %>%
+  mutate(Announcment = if_else(is.na(Announcment), 
+                               Stage_1, Announcment)) %>%
+  arrange(Stage_3) %>%
+  arrange(Stage_2) %>%
+  arrange(Stage_1) %>%
+  arrange(Announcment) %>%
+  mutate(num_id = 1:n())
+
+
+geos_num <- um %>%
+  select(LEZ, num_id) %>%
+  left_join(main_dta) %>%
+  select(LEZ, num_id, geo) %>% 
+  unique() %>% as.data.frame()
+
+plot_weights <- weights %>%
+  left_join(geos_num) %>%
+  ggplot() +
+  geom_point(aes(x = r1, y = r2, 
+                 col = Group, shape = Group)) +
+  ggrepel::geom_label_repel(
+    aes(x = r1,
+        y = r2,
+        label = LEZ),
+    size = 3,
+    direction = "both",
+    force = 1.4,
+    # nudge_x     = 0.3,
+    # direction    = "x",
+    # angle        = 90,
+    # vjust        = -2,
+    segment.size = 0.2,
+    # min.segment.length = 0.4, 
+    # family = "Times New Roman"
+    # arrow = arrow(length = unit(0.02, "npc"))
+    point.padding = 0.5,
+    box.padding = 0.5
+    # box.padding = unit(2, "lines")
+  ) +
+  labs(
+    x = "Factor 1", y = "Factor 2"
+  ) +
+  theme_bw() +
+  theme(legend.position = "none")
+
+plot_factor_paths <- out_n2$factor %>%
+  as_tibble(rownames = "year") %>%
+  mutate_if(is.numeric, function(x){(x-mean(x))/sd(x)}) %>%
+  mutate(year = as.integer(year)) %>%
+  pivot_longer(cols = c("r1", "r2"), 
+               values_to = "value", names_to = "factor") %>%
+  ggplot() +
+  geom_line(aes(x= year, y = value, 
+                # color = factor, 
+                linetype = factor,
+                # size = 0.001
+                )) +
+  geom_hline(yintercept = 0)+
+  # pretty
+  labs(
+    x = "Year",
+    y = "Estimate"
+  ) +
+  # scale_color_brewer(palette="Set1") +
+  theme_bw() +
+  theme(legend.position = "none")
+  
+
+
+# plot_factors <- plot(out_n2, type = "factors", theme.bw = TRUE,
+#                      main = "")
+# plot_factors +
+#   theme(legend.position = "none") +
+#   labs(
+#     y = "Estimate",
+#     x = "Year"
+#   )
+
+
+pdf(file="images/prelim_results/f_loadings.pdf",
+    width = 3, height = 3)
+plot_weights 
+dev.off()
+
+pdf(file="images/prelim_results/factors_time.pdf",
+    width = 3, height = 3)
+plot_factor_paths
+dev.off()
 ```
 
 Regarding factors' evolution:
@@ -694,12 +898,12 @@ Regarding factor loadings:
 ```{r}
 for (i in n3_dta[n3_dta$treated_uz == TRUE, ]$geo %>% unique()){
   if (i %in% out_n2$id.tr){
-    # print(i)
-    # pdf(file=paste0("images/prelim_results/ind_real_eff",
-    #               "_",  i, ".pdf"),
-    # width = 3.5, height = 3.1)
+    print(i)
+    pdf(file=paste0("images/prelim_results/ind_real_eff",
+                  "_",  i, ".pdf"),
+    width = 3.5, height = 3.1)
     plot_i <- out_n2$est.ind[, ,i] %>%
-      as.tibble(rownames = "rel_time") %>%
+      as_tibble(rownames = "rel_time") %>%
       mutate(rel_time = 2010 + as.numeric(rel_time)) %>%
       ggplot(aes(x= rel_time, y = EFF, group = 1)) +
       geom_ribbon(aes(ymin = CI.lower, ymax = CI.upper),
@@ -713,14 +917,12 @@ for (i in n3_dta[n3_dta$treated_uz == TRUE, ]$geo %>% unique()){
         y = "GDP per capita (€)"
       )
     print(plot_i)
-    # dev.off()
+    dev.off()
   }
 }
 
-
-
 temp <- out_n2$eff %>%
-      as.tibble(rownames = "year") %>%
+      as_tibble(rownames = "year") %>%
   pivot_longer(cols = is.numeric, names_to = "geo") %>%
   left_join(n3_dta %>% select(geo, year_announced, LEZ)) %>%
   mutate(year = as.numeric(year)) %>%
@@ -752,6 +954,14 @@ donor_pool <- nuts_treated %>%
   filter(!is.na(DEE03))
 
 osm_units <- tmaptools::read_osm(donor_pool, ext=1.1)
+# Get basemap for Germany
+
+library("rnaturalearth")
+library("rnaturalearthdata")
+
+germany <- ne_countries(scale = "medium",
+                      country = "germany",
+                      returnclass = "sf")
 
 donor_pool %>% as.data.frame() %>%
   select(NUTS_ID, DEE03) %>%
@@ -783,13 +993,15 @@ tm_shape(osm_units) +
 # MAP of factors
 
 factor_weights <- rbind(out_n2$lambda.co, out_n2$lambda.tr) %>%
-  as.tibble(rownames = "NUTS_ID") %>%
+  as_tibble(rownames = "NUTS_ID") %>%
+  mutate(treatment = c(rep("Control", nrow(out_n2$lambda.co)),
+                       rep("Treated", nrow(out_n2$lambda.tr)))) %>%
   mutate_if(is.numeric, function(x){(x-mean(x))/sd(x)})
 
 factor_weights <- nuts_treated %>%
   right_join(factor_weights) %>%
-  select(NUTS_ID, r1, r2, r3) %>%
-  rename(c("Factor 1" = r1, "Factor 2" = r2, "Factor 3" = r3))
+  select(NUTS_ID, r1, r2, treatment) %>%
+  rename(c("Factor 1" = r1, "Factor 2" = r2)) #, "Factor 3" = r3))
 
 
 
@@ -819,27 +1031,31 @@ tm_shape(osm_units) +
 
 # Investigate factor 1 and it's relation with GDP_capita
 mean_gdp_cap <- apply(cbind(out_n2$Y.tr, out_n2$Y.co), 2, mean) %>%
-  as.tibble(rownames = "NUTS_ID")
+  as_tibble(rownames = "NUTS_ID")
 
-# pdf(file="images/prelim_results/factor_1_gdp.pdf",
-#     width = 3, height = 4)
+pdf(file="images/prelim_results/factor_1_gdp.pdf",
+    width = 3, height = 3)
 factor_weights %>%
   left_join(mean_gdp_cap) %>% as.data.frame() %>%
   ggplot() +
   geom_point(aes(x = `Factor 1`, y = value)) +
-  labs(x = "Factor 1", y = "Mean GDP per capita (€)")
-# dev.off()
+  labs(x = "Factor 1", y = "Mean GDP per capita (€)") +
+  theme_bw()
+dev.off()
 
 # # Factor 2 ¿ Center germany VS hanburg + Duserldof + Stuttgart?
 
-# pdf(file="images/prelim_results/factor_2_map.pdf",
-#     width = 3, height = 4)
-tm_shape(osm_units) +
-  tm_rgb() +
-  tm_shape(factor_weights) +
+pdf(file="images/prelim_results/factor_2_map.pdf",
+    width = 3, height = 3)
+tm_shape(germany) +
+  tm_polygons() +
+tm_shape(factor_weights) +
   tm_polygons(col = "Factor 2") +
-  tm_layout(legend.bg.color = "white")
-# dev.off()
+tm_shape(factor_weights %>% filter(treatment == "Treated")) +
+  tm_borders(col = "black") +
+  tm_layout(legend.bg.color = "white",
+            legend.outside = TRUE)
+dev.off()
 
 # leaflet() %>% addTiles() %>%
 #   addPolygons(data = factor_weights, 
@@ -1445,7 +1661,7 @@ names_geo <- main_dta %>%
   select(geo, simple_LEZ, nuts_name) %>% unique()
 
 weights_treated_pool <- out_n2$wgt.implied %>%
-  as.tibble(rownames = "treated") %>%
+  as_tibble(rownames = "treated") %>%
   pivot_longer(cols = 2:4, names_to = "control") %>%
   left_join(names_geo[, 1:2], by = c("treated" = "geo")) %>%
   rename(name_treated = simple_LEZ) %>%
@@ -1475,7 +1691,7 @@ for (i in fake_tr_dta_real[fake_tr_dta_real$treated_uz == FALSE, ]$geo %>% uniqu
   if (i %in% out_n2$id.tr){
     # print(i)
     plot_i <- out_n2$est.ind[, ,i] %>%
-      as.tibble(rownames = "rel_time") %>%
+      as_tibble(rownames = "rel_time") %>%
       mutate(rel_time = as.numeric(rel_time)+2000) %>%
       ggplot(aes(x= rel_time, y = -EFF, group = 1)) +
       geom_ribbon(aes(ymin = -CI.lower, ymax = -CI.upper),
@@ -1617,7 +1833,7 @@ plot(out_n2, type = "factors")
 ```{r}
 fake_tr_dta_real <- fake_tr_dta %>%
   # fake treated that have good synths(prev.step) or real treated
-  filter(geo %in% out_n2$id.tr | treated_uz ) 
+  filter(geo %in% out_n2$id.tr | treated_uz) 
 
 out_n2 <- gsynth(gdp_eur_hab ~ is_treated,
                data = fake_tr_dta_real, 
@@ -1709,7 +1925,7 @@ names_geo <- main_dta %>%
   select(geo, simple_LEZ, nuts_name) %>% unique()
 
 weights_treated_pool <- out_n2$wgt.implied %>%
-  as.tibble(rownames = "treated") %>%
+  as_tibble(rownames = "treated") %>%
   pivot_longer(cols = DE402:DEF03, names_to = "control") %>%
   left_join(names_geo[, 1:2], by = c("treated" = "geo")) %>%
   rename(name_treated = simple_LEZ) %>%
@@ -1752,7 +1968,7 @@ for (i in fake_tr_dta_real[fake_tr_dta_real$treated_uz == FALSE, ]$geo %>% uniqu
     #                 "_",  i, ".pdf"),
         # width = 4, height = 2.7)
     plot_i <- out_n2$est.ind[, ,i] %>%
-      as.tibble(rownames = "rel_time") %>%
+      as_tibble(rownames = "rel_time") %>%
       mutate(rel_time = as.numeric(rel_time)+2000) %>%
       ggplot(aes(x= rel_time, y = -EFF, group = 1)) +
       geom_ribbon(aes(ymin = -CI.lower, ymax = -CI.upper),
@@ -1797,22 +2013,27 @@ Do first analysis (look for good pre-treatment placebo):
 ```{r}
 n3_dta <- main_dta %>%
   # # restrict to NUTS with good synthetic controls
-  filter(geo %in% c(
-    "DEA15", "DEA2B", "DE711", "DE713",
-    # "DEE03", 
-    "DEA14",
-    "DE113") | treated_uz == FALSE) %>%
+  # filter(geo %in% c( # FOR VARIOUS EUR COUTNRIES
+  #   "DEA15", "DEA2B", "DE711", "DE713",
+  #   # "DEE03", 
+  #   # "DEA14",
+  #   "DE113") | treated_uz == FALSE) %>%
+  filter(geo %in% c( # Only German Controls
+    "DEA15", "DEA5A", "DEE03",
+    "DE11C", # EXTRAS
+    # "DEA18",
+    "DEE02") | treated_uz == FALSE) %>%
     # Remove all "treated" NUTS3 regions that are not representative of their cities
   filter( !(geo %in% not_optimal_treated)) %>%
 
   filter(treated_uz | contr_restr_60km) %>%
-  # filter(country == "DE")
+  filter(country == "DE")
   # filter(country %in% c("DE",
   #                       "NL", "BE", "AT",
   #                       "SE", "NO", "FI"
-  #                       )) %>%
+  #                       )) 
   # filter(!(country %in% c("EL", "ES", "IT", "PT", "PL", "TR")))
-  filter(!(country %in% c("EL", "ES", "IT", "PT","PL", "RO", "TR")))
+  # filter(!(country %in% c("EL", "ES", "IT", "PT","PL", "RO", "TR")))
 #,")))
 
 # Minimum pop density in sample and in treated
@@ -1839,14 +2060,14 @@ out_n2 <- gsynth(gva_rate_local_trade ~ is_announced_4y,
                na.rm = TRUE, # remove NA
                force = "time", # unit or time fixed effects or both?
                # CV = TRUE, 
-               r = c(0,4), # an integer specifying the number of factors. If CV = TRUE, the cross validation procedure will select the optimal number of factors from r to 5.
+               r = c(0,2), # an integer specifying the number of factors. If CV = TRUE, the cross validation procedure will select the optimal number of factors from r to 5.
                se = TRUE,
                EM = TRUE, # Gobillon and Magnac (takes a lot of time)
                inference = "parametric",
                # estimator = "mc",
                nboots = 300,  #500
                parallel = TRUE, cores = 5, # if do parallel and how many cores
-               min.T0 = 6) # Has to be larger than r.max+1
+               min.T0 = 3) # Has to be larger than r.max+1
 
 out_n2 %>% print()
 out_n2$Nco
@@ -1907,14 +2128,14 @@ n3_dta <- main_dta %>%
   filter(geo %in% out_n2$id.tr | !treated_uz ) %>%
 
   filter(treated_uz | contr_restr_60km) %>%
-  # filter(country == "DE") %>%
+  filter(country == "DE") %>%
   # filter(country %in% c("DE",
   #                       "NL", "BE", "AT",
   #                       "SE", "NO", "FI"
   #                       )) %>%
-  filter(!(country %in% c("EL", "ES", "IT", "PT", 
-                          "RO", "PL", "TR"))) 
-  # filter(!(geo %in% not_optimal_treated)) %>%
+  # filter(!(country %in% c("EL", "ES", "IT", "PT", 
+  #                         "RO", "PL", "TR"))) 
+  filter(!(geo %in% not_optimal_treated))
   
 # Minimum pop density in sample and in treated
 n3_dta$pop_km2 %>% summary()
@@ -2029,6 +2250,43 @@ What are the caracteristics of these cities?
 
 #### 4. (extended)
 
+#### Sum Stat
+
+```{r}
+library(stargazer)
+
+dta_for_summary <- n3_dta %>%
+  select(geo, gva_rate_local_trade, pop_km2, pop_total, treated_gz,
+         gva_rate_work) %>%
+  group_by(geo) %>%
+  summarise_all(function(x){mean(x, na.rm = TRUE)}) %>%
+  as.data.frame() %>%
+  mutate(treated_summ = ifelse(treated_gz == 1,
+                               yes = "Treated", no = "Control"))
+
+# install.packages("reporttools")  #Use this to install it, do this only once
+require(reporttools)
+
+vars <- dta_for_summary[,c("gva_rate_local_trade", 
+                           'gva_rate_work', #"pop_total",
+                           'pop_km2')]
+group <- dta_for_summary[,c('treated_summ')]
+
+## display default statistics, only use a subset of observations, grouped analysis
+
+result <- tableContinuous(vars = vars, group = group, 
+                stats = c("n", "min", "mean", "max", "s"),
+                prec = 3,font.size = "small",
+                # print.pval = "anova",
+                cap = "Summary statistics for effect on sectors",
+                lab = "tab: descr stat sectors",
+                longtable = FALSE
+                # file = "Presentations and documents/results/des_gdpcapita.tex"
+                )
+
+cat(gsub("\\\\hline\n[^\n]+& all &[^\n]+\n", "", result))
+```
+
 ##### Support for predictors
 
 ```{r}
@@ -2096,7 +2354,7 @@ for (i in n3_dta[n3_dta$treated_uz == TRUE, ]$geo %>% unique()){
     #               "_",  i, ".pdf"),
     # width = 3.5, height = 3.1)
     plot_i <- out_n2$est.ind[, ,i] %>%
-      as.tibble(rownames = "rel_time") %>%
+      as_tibble(rownames = "rel_time") %>%
       mutate(rel_time = 2010 + as.numeric(rel_time)) %>%
       ggplot(aes(x= rel_time, y = EFF, group = 1)) +
       geom_ribbon(aes(ymin = CI.lower, ymax = CI.upper),
@@ -2160,8 +2418,8 @@ nuts_treated %>%
   leaflet() %>% addTiles() %>%
   addPolygons()
 
-tm_shape(osm_units_europe) +
-  tm_rgb() +
+tm_shape(germany) +
+  tm_polygons() +
   tm_shape(nuts_treated %>%
              filter(NUTS_ID %in% out_n2$id.tr)) +
   tm_polygons( col = "red") 
@@ -2169,22 +2427,26 @@ tm_shape(osm_units_europe) +
 # MAP of factors
 
 factor_weights <- rbind(out_n2$lambda.co, out_n2$lambda.tr) %>%
-  as.tibble(rownames = "NUTS_ID") %>%
+  as_tibble(rownames = "NUTS_ID") %>%
+  mutate(treatment = c(rep("Control", nrow(out_n2$lambda.co)),
+                       rep("Treated", nrow(out_n2$lambda.tr)))) %>%
   mutate_if(is.numeric, function(x){(x-mean(x))/sd(x)})
 
 factor_weights <- nuts_treated %>%
   right_join(factor_weights) %>%
-  select(NUTS_ID, r1, r2, r3) %>%
+  select(NUTS_ID, treatment, r1, r2, r3) %>%
   rename(c("Factor 1" = r1, "Factor 2" = r2, "Factor 3" = r3))
 
 
 
 # # Factor 1, Rural - VS - Urban "economy" (or more gdp_capita) 
 
-tm_shape(osm_units_europe) +
-  tm_rgb() +
-  tm_shape(factor_weights) +
+tm_shape(germany) +
+  tm_polygons() +
+tm_shape(factor_weights) +
   tm_polygons(col = "Factor 1") +
+tm_shape(factor_weights %>% filter(treatment == "Treated")) +
+  tm_borders(col = "black") +
   tm_layout(legend.bg.color = "white", 
             legend.position = c("right", "top"))
 
@@ -2206,7 +2468,7 @@ tm_shape(osm_units_europe) +
 
 # Investigate factor 1 and it's relation with GDP_capita
 outcome_means <- apply(cbind(out_n2$Y.tr, out_n2$Y.co), 2, mean) %>%
-  as.tibble(rownames = "NUTS_ID")
+  as_tibble(rownames = "NUTS_ID")
 
 # pdf(file="images/prelim_results/factor_1_gdp.pdf",
 #     width = 3, height = 4)
@@ -2221,10 +2483,12 @@ factor_weights %>%
 
 # pdf(file="images/prelim_results/factor_2_map.pdf",
 #     width = 3, height = 4)
-tm_shape(osm_units_europe) +
-  tm_rgb() +
-  tm_shape(factor_weights) +
+tm_shape(germany) +
+  tm_polygons() +
+tm_shape(factor_weights) +
   tm_polygons(col = "Factor 2") +
+tm_shape(factor_weights %>% filter(treatment == "Treated")) +
+  tm_borders(col = "black") +
   tm_layout(legend.bg.color = "white", 
             legend.position = c("right", "top"))
 # dev.off()
@@ -2250,10 +2514,12 @@ tm_shape(osm_units_europe) +
 
 # pdf(file="images/prelim_results/factor_3_map.pdf",
 #     width = 3, height = 4)
-tm_shape(osm_units_europe) +
-  tm_rgb() +
-  tm_shape(factor_weights) +
+tm_shape(germany) +
+  tm_polygons() +
+tm_shape(factor_weights) +
   tm_polygons(col = "Factor 3") +
+tm_shape(factor_weights %>% filter(treatment == "Treated")) +
+  tm_borders(col = "black") +
   tm_layout(legend.bg.color = "white", 
             legend.position = c("right", "top"))
 # dev.off()
@@ -2279,7 +2545,7 @@ tm_shape(osm_units_europe) +
 
 > note!: (to do) Review if there are some "imperfect treated" in the results.
 
-### Work (Finantial, professional, Real State)
+### Work
 
 ```{r}
 main_dta %>%
@@ -2304,9 +2570,12 @@ Do first analysis (look for good pre-treatment placebo):
 ```{r}
 n3_dta <- main_dta %>%
   # restrict to NUTS with good synthetic controls
-  filter(geo %in% c("DE711",
+  filter(geo %in% c("DEA18",
+                    "DEA1D",
                     "DE143",
-                    "DE713", "DEA5A") | treated_uz == FALSE) %>%
+                    "DE714",
+                    "DEE03", 
+                    "DEE02") | treated_uz == FALSE) %>%
     # Remove all "treated" NUTS3 regions that are not representative of their cities
   filter( !(geo %in% not_optimal_treated)) %>%
 
@@ -2337,20 +2606,20 @@ n3_dta <- n3_dta %>%
   ) %>%
   ungroup()
 
-out_n2 <- gsynth(gva_rate_industry ~ is_announced_4y, 
+out_n2 <- gsynth(gva_rate_work ~ is_announced_4y, 
                data = n3_dta, 
                index = c("geo","time"), 
                na.rm = TRUE, # remove NA
                force = "time", # unit or time fixed effects or both?
                # CV = TRUE, 
-               r = c(0,5), # an integer specifying the number of factors. If CV = TRUE, the cross validation procedure will select the optimal number of factors from r to 5.
+               r = c(0,3), # an integer specifying the number of factors. If CV = TRUE, the cross validation procedure will select the optimal number of factors from r to 5.
                se = TRUE,
                EM = TRUE, # Gobillon and Magnac (takes a lot of time)
                inference = "parametric",
                # estimator = "mc",
                nboots = 300,  #500
                parallel = TRUE, cores = 5, # if do parallel and how many cores
-               min.T0 = 7) # Has to be larger than r.max+1
+               min.T0 = 5) # Has to be larger than r.max+1
 
 out_n2 %>% print()
 out_n2$Nco
@@ -2437,7 +2706,7 @@ n3_dta <- n3_dta %>%
   ) %>%
   ungroup()
 
-out_n2 <- gsynth(gva_rate_local_trade ~ is_announced,
+out_n2 <- gsynth(gva_rate_work ~ is_announced,
                data = n3_dta, 
                index = c("geo","time"), 
                na.rm = TRUE, # remove NA
@@ -2593,7 +2862,7 @@ for (i in n3_dta[n3_dta$treated_uz == TRUE, ]$geo %>% unique()){
     #               "_",  i, ".pdf"),
     # width = 3.5, height = 3.1)
     plot_i <- out_n2$est.ind[, ,i] %>%
-      as.tibble(rownames = "rel_time") %>%
+      as_tibble(rownames = "rel_time") %>%
       mutate(rel_time = 2010 + as.numeric(rel_time)) %>%
       ggplot(aes(x= rel_time, y = EFF, group = 1)) +
       geom_ribbon(aes(ymin = CI.lower, ymax = CI.upper),
@@ -2663,7 +2932,7 @@ tm_shape(osm_units_europe) +
 # MAP of factors
 
 factor_weights <- rbind(out_n2$lambda.co, out_n2$lambda.tr) %>%
-  as.tibble(rownames = "NUTS_ID") %>%
+  as_tibble(rownames = "NUTS_ID") %>%
   mutate_if(is.numeric, function(x){(x-mean(x))/sd(x)})
 
 factor_weights <- nuts_treated %>%
@@ -2700,7 +2969,7 @@ tm_shape(osm_units_europe) +
 
 # Investigate factor 1 and it's relation with GDP_capita
 outcome_means <- apply(cbind(out_n2$Y.tr, out_n2$Y.co), 2, mean) %>%
-  as.tibble(rownames = "NUTS_ID")
+  as_tibble(rownames = "NUTS_ID")
 
 # pdf(file="images/prelim_results/factor_1_gdp.pdf",
 #     width = 3, height = 4)

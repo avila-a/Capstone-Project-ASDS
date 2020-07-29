@@ -859,13 +859,21 @@ uar_dta$lez %>% sum(na.rm = TRUE)
 ### Small analysis of the application of LEZ zones in Germany:
 
 ```{r}
-umweltzonen <- dbGetQuery(db, "SELECT * from umweltzonen")
+umweltzonen <- readRDS("data/umweltbundesamt/umweltzonen.rds")
+# dbGetQuery(db, "SELECT * from umweltzonen")
 
 um <- umweltzonen %>%
   mutate(Stage_1 = as.Date(Stage_1, "%d.%m.%Y"),
          Stage_2 = as.Date(Stage_2, "%d.%m.%Y"),
          Stage_3 = as.Date(Stage_3, "%d.%m.%Y"),
-         Announcment = as.Date(Announcment))
+         Announcment = as.Date(Announcment)) %>%
+  mutate(Announcment = if_else(is.na(Announcment), 
+                               Stage_1, Announcment)) %>%
+  arrange(Stage_3) %>%
+  arrange(Stage_2) %>%
+  arrange(Stage_1) %>%
+  arrange(Announcment) %>%
+  mutate(num_id = 1:n())
 
 all <- expand.grid(LEZ = um$LEZ, 
                    year = seq(2006, 2018),
@@ -907,8 +915,9 @@ panel_zones <- all %>%
   arrange(Stage_2) %>%
   arrange(Stage_1) %>%
   arrange(Announcment) %>%
-  mutate(LEZ_factor = fct_inorder(LEZ)) %>%
-  select(LEZ, date, status, year, month, LEZ_factor)
+  mutate(LEZ_number = paste0(LEZ, " - ", num_id)) %>%
+  mutate(LEZ_factor = fct_inorder(LEZ_number)) %>%
+  select(LEZ_number, date, status, year, month, LEZ_factor)
 
 panel_zones %>% head()
 ```
@@ -928,11 +937,12 @@ pv_timeline <- panelView(month ~ status, data = panel_zones,
           na.rm = FALSE,
           pre.post = TRUE,
           legend.labs = c("No LEZ applied", "LEZ announced", 
-                          "Red, yellow or green sticker", 
+                          "Only red, yellow or green sticker",
                           "Only yellow or green sticker", 
                           "Only green stiker"),
           color = c("grey90", "grey60", "red1", 
-                    "yellow1", "green4")) 
+                    "yellow1", "green4")) +
+  theme(legend.box.margin = margin(l = -5, unit = "cm"))
 
 png(filename = "images/LEZ application germany_3.png",
     width = 780, height = 1000, res = 100)
@@ -1026,7 +1036,7 @@ pv_timeline +
              # family="Helvetica", 
              size = 5)
 
-# dev.off()
+dev.off()
 
 # png(filename = "images/LEZ application germany_clean.png",
 #     width = 780, height = 1000, res = 100)
@@ -1035,12 +1045,14 @@ pv_timeline +
 
 # devtools::install_github('xuyiqing/panelView')
 # RColorBrewer::brewer.pal.info
+pv_timeline
 ```
 
 > NOTE! I NEED TO FIND THE DATE OF ANOUNCEMT OF THE MISSING LEZ!
 
 (Image saved in png file)
 
+Simple Version:
 
 
 ```{r, fig.height=8, fig.width= 9}
@@ -1065,4 +1077,155 @@ panelView(month ~ status, data = panel_zones,
 ```
 
 (Image saved in png file)
+
+### Map of cities
+
+```{r}
+# Get data on cities with LEZ
+umweltzonen_map <- um %>%
+  mutate(in_sample = 
+           ifelse(year_announced < 2009 | is.na(year_announced), 
+                            "Excluded", "Included"))
+
+# umweltzonen
+# 
+# main_dta %>%
+#   filter(LEZ == "Berlin") %>%
+#   select(LEZ, gdp_mio_eur)
+
+
+# Merge it with cities' NUTS characteristics
+umweltzonen_map <-  main_dta %>%
+  filter(treated_uz == TRUE) %>%
+  select(LEZ, gdp_mio_eur) %>%
+  group_by(LEZ) %>% 
+  summarise_all(function(x){mean(x, na.rm =  TRUE)}) %>%
+  right_join(umweltzonen_map) %>%
+  st_as_sf()
+
+# Get coodinates and characteristics of 3 "control" regions
+
+nuts_time %>%
+  filter(geo %in% c("DE402", "DED41", "DEF03")) %>%
+  select(geo, gdp_mio_eur) %>%
+  group_by(geo) %>%
+  summarise_all(function(x){mean(x, na.rm =  TRUE)})
+
+temp <- data.frame(LEZ = c("Lübeck", "Cottbus", "Chemnitz"),
+                   in_sample = rep("Control", 3),
+                   gdp_mio_eur = c(2865, 6969, 6671),
+                   lat = c(53.85678, 51.760325, 50.835651),
+                   lon = c(10.67413, 14.325153, 12.929591)
+                   )
+
+temp_sf <- temp %>%
+  st_as_sf(coords = c("lon", "lat"),
+           crs = "+proj=longlat +datum=WGS84 +no_defs")
+
+umweltzonen_pro <- umweltzonen_map %>%
+  select(LEZ, in_sample, gdp_mio_eur) %>%
+  rbind(temp_sf)
+
+umweltzonen_pro
+
+separated_coord <- umweltzonen_map %>%
+    mutate(lat = unlist(map(umweltzonen_map$geometry,1)),
+           long = unlist(map(umweltzonen_map$geometry,2)))
+
+separated_coord_control <- temp_sf %>%
+  filter(in_sample == "Control") %>%
+    mutate(lat = unlist(map(temp$geometry,1)),
+           long = unlist(map(temp$geometry,2)))
+
+# Get basemap for Germany
+
+# library("rnaturalearth")
+# library("rnaturalearthdata")
+# 
+# germany <- ne_countries(scale = "medium", 
+#                       country = "germany",
+#                       returnclass = "sf")
+
+germany2 <- nuts_treated %>%
+  filter(country == "DE") %>%
+  st_combine() %>% 
+  st_union()
+```
+
+
+```{r, fig.height= 9, fig.width=7.5}
+library(scales)
+
+pdf(file = "images/GermanNutsAndLEZ.pdf",
+    width = 7.5, height = 10)
+
+ggplot() +
+  geom_sf(data = germany2) +
+  geom_sf(data = umweltzonen_pro, 
+          aes(color = in_sample, size = gdp_mio_eur)) +
+  # geom_sf_label(data = umweltzonen, 
+  #         aes(label = num_id, size = 3)) +
+  ggrepel::geom_label_repel(
+    data = separated_coord,
+    aes(x = lat,
+        y = long,
+        label = num_id),
+    size = 3,
+    min.segment.length = 0.4, 
+    # family = "Times New Roman"
+    # arrow = arrow(length = unit(0.02, "npc"))
+    # point.padding = NA
+    # box.padding = unit(2, "lines")
+  ) +
+  geom_label_repel(
+    data = temp,
+    aes(x = lon,
+        y = lat,
+        label = LEZ),
+    size = 3,
+    min.segment.length = 0.4, 
+    # family = "Times New Roman"
+    # arrow = arrow(length = unit(0.02, "npc"))
+    # point.padding = NA
+    # box.padding = unit(2, "lines")
+  ) +
+  # Asthetics
+  labs(x = "", y = "",
+       color = "In Sample:",
+       size = "Regional GDP:"
+       ) +
+  scale_size_continuous(labels = comma) +
+  guides(color = guide_legend(reverse = TRUE)) +
+  theme_bw() +
+  theme(
+    legend.spacing = unit(0.4, "cm"),
+    legend.position= "top",
+    # legend.box.margin = margin(l = -1, unit = "cm"),
+    legend.background = element_rect(color = "darkgray")
+  )
+  
+
+dev.off()
+
+  # coord_sf(crs = "+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +ellps=GRS80 +units=m +no_defs ")
+```
+
+
+```{r, fig.height= 10, fig.width=7}
+tm_shape(germany) +
+    tm_borders() +
+tm_shape(umweltzonen) +
+    tm_symbols(col = "in_sample",
+               size = "gdp_mio_eur", 
+               scale = 4) +
+    tm_text("num_id", size = 0.7, 
+            # auto.placement = TRUE
+            ) +
+  tm_layout(legend.bg.color = "white")
+    
+tm_legend(show = FALSE)
+
+umweltzonen
+```
+
 

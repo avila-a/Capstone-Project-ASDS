@@ -50,7 +50,7 @@ available_tags("boundary")
 gh <- opq("Ghent") %>%
   add_osm_feature(key = "boundary", value = "low_emission_zone") %>%
   osmdata_sf()
-gh
+
 poly <- gh$osm_multipolygons
 poly$start_date
 poly$geometry %>% plot()
@@ -85,37 +85,61 @@ This scans in all the European union regions and gets the low emissions zones fr
 uk$meta
 uk$overpass_call %>% cat()
 
-## Full Europe:
-lat <- seq(-10, 31, by = 2)
-long <- seq(36, 62, by =  2)
+# ## Full Europe:
+# lat <- seq(-10, 31, by = 2)
+# long <- seq(36, 62, by =  2)
+
+## Only Germany
+
+lat <- seq(4, 18, by = 1)
+long <- seq(47, 55, by =  1)
 
 # lat <- seq(-1, 15, by = 2)
 # long <- seq(48, 54, by =  2)
 length(lat)
 
-final_geom <- data.frame()
-final_geom
+# final_geom <- data.frame()
+# final_geom
 geometries <- list()
 tictoc::tic()
 for (i in 2:length(lat)){ # Does this include the ones who are cutted by the bbox?
   for (j in 2:length(long)){
     cat("lat ", i-1, "long", j-1, "\n")
-    coordinates <- c(lat[i-1], long[j-1], lat[i], long[j])
+    # Construct coordinates with a minor shift so they overlay eachother
+    coordinates <- c(lat[i-1]-0.1, long[j-1]-0.1, lat[i], long[j])
     result_querry <- opq(
-      bbox = coordinates, 
+      bbox = coordinates,
       memsize = "1073741824", timeout = 60) %>%
       add_osm_feature(key = "boundary", value = "low_emission_zone") %>%
+      # add_osm_feature(key = "name", value = "Umweltzone") %>%
       osmdata_sf()
     result_geom <- result_querry$osm_multipolygons
+    
+    # result_querry <- opq(
+    #   bbox = coordinates, 
+    #   memsize = "1073741824", timeout = 60) %>%
+    #   # add_osm_feature(key = "boundary", value = "low_emission_zone") %>%
+    #   add_osm_feature(key = "name", value = "umweltzone",
+    #                   value_exact = FALSE
+    #                   ) %>%
+    #   osmdata_sf()
+    # result_geom <- result_querry$osm_multipolygons
     if(is.null(result_geom)){
       next
     }
     cat("new data!", nrow(result_geom), "\n")
-    final_geom <- bind_rows(final_geom, as.data.frame(result_geom))
-    for (maps in 1:nrow(result_geom)){
-      geometries[result_geom$osm_id[maps]] <- result_geom$geometry[maps]
-    }
+    # the first time, save the base file:
+    if(i == 2 & j == 5){
+      final_geom <- as.data.frame(result_geom)
+  } else {
+    final_geom <- bind_rows(as.data.frame(result_geom), final_geom)
   }
+  
+  cat("been here!", "\n")
+  for (maps in 1:nrow(result_geom)){
+    geometries[result_geom$osm_id[maps]] <- result_geom$geometry[maps]
+  }
+}
 }
 tictoc::toc()
 # Results of the grid search:
@@ -123,10 +147,11 @@ tictoc::toc()
 # All the dataset:
 lez_data <- final_geom %>%
   select(
-    osm_id, name, boundary, note, source, start_date, website, geometry,
+    osm_id, name, boundary, source, start_date, website, geometry,
     access, osmwiki
   )
-lez_data <- lez_data %>% st_sf()
+lez_data <- lez_data %>% st_sf() %>% st_make_valid()
+
 lez_data %>% class
 
 st_crs(lez_data$geometry) <- "+proj=longlat +datum=WGS84"
@@ -153,6 +178,11 @@ leaflet() %>% addTiles() %>%
 
 # st_write(lez_data2, "data/lez_data2/lez_data2.shp")
 methods(class = "sf")
+
+as.data.frame(result_geom)
+
+leaflet() %>% addTiles() %>%
+  addPolygons(data = lez_data, weight = 6, col = "red")
 
 ```
 
