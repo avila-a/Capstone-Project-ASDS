@@ -482,17 +482,23 @@ plot(out_n2, type = "counterfactual",
      theme.bw = TRUE)
 
 for (i in n3_dta[n3_dta$treated_uz == TRUE, ]$geo %>% unique()){
-  # pdf(file=paste0("images/prelim_results/ind_placebo",
-  #                 "_",  i, ".pdf"),
-    # width = 3.5, height = 3.1)
-  plot(out_n2, type = "counterfactual", id = i, 
+  
+  placebo_plot  <- plot(out_n2, type = "counterfactual", id = i, 
        xlim = c(2000, n3_dta[n3_dta$geo == i,
                                            ]$year_announced[1]-1),
        # main = paste0(n3_dta[n3_dta$geo == i,]$LEZ[1], 
        #                 " and SC"),
        sub = "Pre-intervention placebo of 3 years",
        xlab = "Year", ylab = "GDP/capita") 
-  print(i)
+  
+  # pdf(file=paste0("images/prelim_results/ind_placebo",
+  #                 "_",  i, ".pdf"),
+  # width = 3.5, height = 3.1)
+  final_plot <- placebo_plot + 
+    scale_x_continuous(labels = 
+                         scales::number_format(accuracy = 1,
+                                               big.mark = ""))
+  print(final_plot)
   # dev.off()
 }
 
@@ -539,6 +545,8 @@ n3_dta <- n3_dta %>%
   ) %>%
   ungroup()
 
+
+# Delete data of Magdeburg after the 2013 floods
 n3_dta <- n3_dta %>%
   filter(!(geo == "DEE03" & time >= 2013))
 
@@ -630,8 +638,8 @@ fact_ggplot <- plot(out_n2, type = "factors",
 #        x = "Year")
 # dev.off()
 
-pdf(file="images/prelim_results/ATT_gdp_cap.pdf",
-    width = 5.5, height = 3)
+# pdf(file="images/prelim_results/ATT_gdp_cap.pdf",
+#     width = 5.5, height = 3)
 out_n2$est.att %>%
   as_tibble(rownames = "rel_time") %>%
   mutate(rel_time = as.integer(rel_time)) %>%
@@ -652,7 +660,7 @@ out_n2$est.att %>%
   ) +
   scale_x_continuous(breaks=seq(-8,9,2)) +
   scale_y_continuous(breaks = seq(-8000, 2000, 2000))
-dev.off()
+# dev.off()
 ```
 
 > Magdeburg suffered from large floods in 2013: Wikipedia +
@@ -899,9 +907,9 @@ Regarding factor loadings:
 for (i in n3_dta[n3_dta$treated_uz == TRUE, ]$geo %>% unique()){
   if (i %in% out_n2$id.tr){
     print(i)
-    pdf(file=paste0("images/prelim_results/ind_real_eff",
-                  "_",  i, ".pdf"),
-    width = 3.5, height = 3.1)
+    # pdf(file=paste0("images/prelim_results/ind_real_eff",
+    #               "_",  i, ".pdf"),
+    # width = 3.5, height = 3.1)
     plot_i <- out_n2$est.ind[, ,i] %>%
       as_tibble(rownames = "rel_time") %>%
       mutate(rel_time = 2010 + as.numeric(rel_time)) %>%
@@ -917,7 +925,7 @@ for (i in n3_dta[n3_dta$treated_uz == TRUE, ]$geo %>% unique()){
         y = "GDP per capita (€)"
       )
     print(plot_i)
-    dev.off()
+    # dev.off()
   }
 }
 
@@ -1740,8 +1748,8 @@ year_start_policy <- 2011
 fake_tr_dta <- fake_tr_dta %>%
   # filter those regions that  do have a good synthetic treated
   # 2011
-  filter((geo %in% c("DED41", "DE402", "DEF03")) | treated_uz) %>%    # Filter treated that have a confoundeing factor (Magdeburg)
-  filter(geo != "DEE03")
+  filter((geo %in% c("DED41", "DE402", "DEF03")) | treated_uz) %>%    # Filter treated that have a confoundeing factor (Magdeburg floods of 2013)
+  filter(!(geo == "DEE03" & time >= 2013))
   # filter(geo != "DE11C") # Filter Heidenheim ¿Reason?
 
 fake_tr_dta <- fake_tr_dta %>% 
@@ -1768,21 +1776,39 @@ fake_tr_dta <- fake_tr_dta %>%
          )
          )  # 
 
+# Minimum pop density in sample and in treated
+
+fake_tr_dta$pop_km2 %>% summary()
+fake_tr_dta[fake_tr_dta$treated_uz == TRUE, ]$pop_km2 %>% summary()
+fake_tr_dta[fake_tr_dta$treated_uz == FALSE, ]$pop_km2 %>% summary()
+
+fake_tr_dta[fake_tr_dta$treated_uz == TRUE, ]$gdp_eur_hab %>% summary()
+fake_tr_dta[fake_tr_dta$treated_uz == FALSE, ]$gdp_eur_hab %>% summary()
+
+fake_tr_dta <- fake_tr_dta %>%
+  filter(pop_km2 < 3000) %>% #avoid very big cities
+  group_by(geo) %>%
+  filter( # Restrict outcome range to reduce interpolation biases
+    mean(gdp_eur_hab, na.rm = TRUE) < 32000,
+    mean(gdp_eur_hab, na.rm = TRUE) > 15000
+  ) %>%
+  ungroup()
+
 fake_tr_dta %>% 
   select(time, geo, year_announced, is_treated, is_treated_3y)
 
-out_n2 <- gsynth(gdp_eur_hab ~ is_treated_4y,
+out_n2 <- gsynth(gdp_eur_hab ~ is_treated_3y,
                data = fake_tr_dta, 
                index = c("geo","time"), 
                na.rm = TRUE, # remove 
                force = "time", # unit or time fixed effects or both?
                # CV = TRUE, 
-               r = c(0, 2), # an integer specifying the number of factors. If CV = TRUE, the cross validation procedure will select the optimal number of factors from r to 5.
+               r = c(0, 3), # an integer specifying the number of factors. If CV = TRUE, the cross validation procedure will select the optimal number of factors from r to 5.
                se = TRUE,
                EM = TRUE, # Gobillon and Magnac (takes a lot of time)
                inference = "parametric",
                # estimator = "mc",
-               nboots = 200,  #500
+               nboots = 300,  #500
                parallel = TRUE, cores = 5, # if do parallel and how many cores
                min.T0 = 6) # Has to be larger than r.max+1
 
@@ -1835,6 +1861,10 @@ fake_tr_dta_real <- fake_tr_dta %>%
   # fake treated that have good synths(prev.step) or real treated
   filter(geo %in% out_n2$id.tr | treated_uz) 
 
+# Delete years of Magdeburg after the 2013 floods
+n3_dta <- n3_dta %>%
+  filter(!(geo == "DEE03" & time >= 2013))
+
 out_n2 <- gsynth(gdp_eur_hab ~ is_treated,
                data = fake_tr_dta_real, 
                index = c("geo","time"), 
@@ -1846,13 +1876,10 @@ out_n2 <- gsynth(gdp_eur_hab ~ is_treated,
                EM = TRUE, # Gobillon and Magnac (takes a lot of time)
                inference = "parametric",
                # estimator = "mc",
-               nboots = 200,  #500
+               nboots = 500,  #500
                parallel = TRUE, cores = 5, # if do parallel and how many cores
                min.T0 = 7) # Has to be larger than r.max+1
-```
 
-
-```{r}
 out_n2 %>% print()
 
 print(paste0("Nº `Control` (Treated) = ", out_n2$Nco))
@@ -2094,18 +2121,26 @@ plot(out_n2, type = "counterfactual",
      theme.bw = TRUE)
 
 for (i in n3_dta[n3_dta$treated_uz == TRUE, ]$geo %>% unique()){
-  # pdf(file=paste0("images/prelim_results/ind_placebo",
-  #                 "_",  i, ".pdf"),
-  #   width = 3.5, height = 3.1)
-  plot(out_n2, type = "counterfactual", id = i, 
+
+  placebo_plot <- plot(out_n2, type = "counterfactual", id = i, 
        xlim = c(2000, n3_dta[n3_dta$geo == i,
                                            ]$year_announced[1]-1),
        main = paste0(
          # n3_dta[n3_dta$geo == i,]$LEZ[1], 
                        " and SC", " - ",
                      n3_dta[n3_dta$geo == i,]$geo[1]),
-       sub = "Pre-intervention placebo of 3 years",
-       xlab = "Year") 
+       sub = "Pre-intervention placebo of 4 years",
+       xlab = "Year",
+       ylab = "Trade' share of GDP") 
+  
+  final_plot <- placebo_plot + 
+    scale_x_continuous(labels = 
+                         scales::number_format(accuracy = 1,
+                                               big.mark = ""))
+  # pdf(file=paste0("images/prelim_results/trade/ind_placebo",
+  #                 "_",  i, ".pdf"),
+  #     width = 3.5, height = 3.1)
+  print(final_plot)
   # dev.off()
 }
 
@@ -2193,30 +2228,30 @@ plot(out_n2, type = "counterfactual",
 for (i in n3_dta[n3_dta$treated_uz == TRUE, ]$geo %>% unique()){
   if (i %in% out_n2$id.tr){
     temp <- plot(out_n2, type = "counterfactual", id = i)
-    # pdf(file=paste0("images/prelim_results/ind_real",
-    #               "_",  i, ".pdf"),
-    # width = 3.5, height = 3.1)
+    pdf(file=paste0("images/prelim_results/trade/ind_real",
+                  "_",  i, ".pdf"),
+    width = 3.5, height = 3.1)
     print(temp + 
             geom_vline(xintercept = n3_dta[n3_dta$geo == i,
                                            ]$year_announced[1], 
-                       color = "grey80") + 
+                       color = "grey80", size = 1.5) + 
             geom_vline(xintercept = n3_dta[n3_dta$geo == i,
                                            ]$year_stage1[1], 
-                       color = "red1") + 
+                       color = "red1", size = 1.5) + 
             geom_vline(xintercept = n3_dta[n3_dta$geo == i,
                                            ]$year_stage2[1], 
-                       color = "yellow1") + 
+                       color = "yellow1", size = 1.5) + 
             geom_vline(xintercept = n3_dta[n3_dta$geo == i,
                                            ]$year_stage3[1], 
-                       color = "green4") +
+                       color = "green4", size = 1.5) +
       labs(
         title = paste0(n3_dta[n3_dta$geo == i,]$LEZ[1], 
                        " and SC"),
-        y = "GDP per capita (€)",
+        y = "Trade' share of GDP",
         x  = "Year"
       )
     )
-    # dev.off()
+    dev.off()
   }
 }
 
@@ -2234,9 +2269,28 @@ plot(out_n2, type = "loadings", main = "")
 fact_ggplot <- plot(out_n2, type = "factors", 
                     main = "",
                     xlab = "Year")
-# fact_ggplot +
-#   labs(title = "",
-#        x = "Year")
+
+# pdf(file="images/prelim_results/ATT_gdp_cap.pdf",
+#     width = 5.5, height = 3)
+out_n2$est.att %>%
+  as_tibble(rownames = "rel_time") %>%
+  mutate(rel_time = as.integer(rel_time)) %>%
+  ggplot(aes(x= rel_time, y = ATT, group = 1)) +
+  geom_segment(x = 0, xend = 0, y = -0.03, yend = 0.01,
+  size = 2, color = "grey50") +
+  geom_ribbon(aes(ymin = CI.lower, ymax = CI.upper),
+              alpha = 0.3) +
+  geom_line(size = 1) +
+  geom_text(aes(x= rel_time, y = 0.015, label = n.Treated)) +
+  # geom_vline(xintercept = 0) +
+
+  geom_hline(yintercept = 0) +
+  labs(
+    # title = "ATT and number of treated regions",
+    x = "Years after the announcment of a LEZ",
+    y = "Change in GDP per capita (€)"
+  ) +
+  scale_x_continuous(breaks=seq(-10,8,2)) 
 # dev.off()
 ```
 
@@ -2350,7 +2404,7 @@ Regarding factor loadings:
 for (i in n3_dta[n3_dta$treated_uz == TRUE, ]$geo %>% unique()){
   if (i %in% out_n2$id.tr){
     # print(i)
-    # pdf(file=paste0("images/prelim_results/ind_real_eff",
+    # pdf(file=paste0("images/prelim_results/trade/ind_real_eff",
     #               "_",  i, ".pdf"),
     # width = 3.5, height = 3.1)
     plot_i <- out_n2$est.ind[, ,i] %>%
@@ -2365,8 +2419,9 @@ for (i in n3_dta[n3_dta$treated_uz == TRUE, ]$geo %>% unique()){
       labs(
         title = paste0(i, " - " ,n3_dta[n3_dta$geo == i,]$LEZ[1]),
         x = "Year",
-        y = "GDP per capita (€)"
-      )
+        y = "Differences in Trade' share of GDP"
+      ) +
+      scale_y_continuous(labels = scales::percent_format(accuracy = 1))
     print(plot_i)
     # dev.off()
   }
@@ -2571,11 +2626,15 @@ Do first analysis (look for good pre-treatment placebo):
 n3_dta <- main_dta %>%
   # restrict to NUTS with good synthetic controls
   filter(geo %in% c("DEA18",
-                    "DEA1D",
+                    # "DEA1D",
                     "DE143",
-                    "DE714",
-                    "DEE03", 
-                    "DEE02") | treated_uz == FALSE) %>%
+                    # "DE714", # Conflictive Weissbaden
+                    "DEE03",
+                    "DEE02",
+                    #extras
+                    "DE713",
+                    "DE711",
+                    "DE11C") | treated_uz == FALSE) %>%
     # Remove all "treated" NUTS3 regions that are not representative of their cities
   filter( !(geo %in% not_optimal_treated)) %>%
 
@@ -2606,7 +2665,7 @@ n3_dta <- n3_dta %>%
   ) %>%
   ungroup()
 
-out_n2 <- gsynth(gva_rate_work ~ is_announced_4y, 
+out_n2 <- gsynth(gva_rate_work ~ is_announced_3y, 
                data = n3_dta, 
                index = c("geo","time"), 
                na.rm = TRUE, # remove NA
@@ -2646,10 +2705,7 @@ plot(out_n2, type = "counterfactual",
      theme.bw = TRUE)
 
 for (i in n3_dta[n3_dta$treated_uz == TRUE, ]$geo %>% unique()){
-  # pdf(file=paste0("images/prelim_results/ind_placebo",
-  #                 "_",  i, ".pdf"),
-  #   width = 3.5, height = 3.1)
-  plot(out_n2, type = "counterfactual", id = i, 
+  placebo_plot <- plot(out_n2, type = "counterfactual", id = i, 
        xlim = c(2000, n3_dta[n3_dta$geo == i,
                                            ]$year_announced[1]-1),
        main = paste0(
@@ -2657,8 +2713,20 @@ for (i in n3_dta[n3_dta$treated_uz == TRUE, ]$geo %>% unique()){
                        " and SC", " - ",
                      n3_dta[n3_dta$geo == i,]$geo[1]),
        sub = "Pre-intervention placebo of 3 years",
-       xlab = "Year") 
-  # dev.off()
+       xlab = "Year",
+       ylab = "Share of GDP") 
+  
+  final_plot <- placebo_plot + 
+    scale_x_continuous(
+      labels = scales::number_format(accuracy = 1,
+                                     big.mark = "")) +
+    scale_y_continuous(
+      labels = scales::percent_format(accuracy = 1))
+  pdf(file=paste0("images/prelim_results/work/ind_placebo",
+                  "_",  i, ".pdf"),
+    width = 3.5, height = 3.1)
+  print(final_plot)
+  dev.off()
 }
 
 
@@ -2717,9 +2785,9 @@ out_n2 <- gsynth(gva_rate_work ~ is_announced,
                EM = TRUE, # Gobillon and Magnac (takes a lot of time)
                inference = "parametric",
                # estimator = "mc",
-               nboots = 300,  #500
+               nboots = 1000,  #500
                parallel = TRUE, cores = 5, # if do parallel and how many cores
-               min.T0 = 6) # Has to be larger than r.max+1
+               min.T0 = 5) # Has to be larger than r.max+1
 
 out_n2 %>% print()
 out_n2$Nco
@@ -2745,28 +2813,30 @@ plot(out_n2, type = "counterfactual",
 for (i in n3_dta[n3_dta$treated_uz == TRUE, ]$geo %>% unique()){
   if (i %in% out_n2$id.tr){
     temp <- plot(out_n2, type = "counterfactual", id = i)
-    # pdf(file=paste0("images/prelim_results/ind_real",
+    # pdf(file=paste0("images/prelim_results/work/ind_real",
     #               "_",  i, ".pdf"),
     # width = 3.5, height = 3.1)
     print(temp + 
             geom_vline(xintercept = n3_dta[n3_dta$geo == i,
                                            ]$year_announced[1], 
-                       color = "grey80") + 
+                       color = "grey80", size = 1.5) + 
             geom_vline(xintercept = n3_dta[n3_dta$geo == i,
                                            ]$year_stage1[1], 
-                       color = "red1") + 
+                       color = "red1", size = 1.5) + 
             geom_vline(xintercept = n3_dta[n3_dta$geo == i,
                                            ]$year_stage2[1], 
-                       color = "yellow1") + 
+                       color = "yellow1", size = 1.5) + 
             geom_vline(xintercept = n3_dta[n3_dta$geo == i,
                                            ]$year_stage3[1], 
-                       color = "green4") +
+                       color = "green4", size = 1.5) +
       labs(
         title = paste0(n3_dta[n3_dta$geo == i,]$LEZ[1], 
                        " and SC"),
-        y = "GDP per capita (€)",
+        y = "Share of GDP",
         x  = "Year"
-      )
+      ) +
+    scale_y_continuous(
+      labels = scales::percent_format(accuracy = 1))
     )
     # dev.off()
   }
@@ -2786,9 +2856,31 @@ plot(out_n2, type = "loadings", main = "")
 fact_ggplot <- plot(out_n2, type = "factors", 
                     main = "",
                     xlab = "Year")
-# fact_ggplot +
-#   labs(title = "",
-#        x = "Year")
+
+
+# pdf(file="images/prelim_results/work/ATT_gdp_cap.pdf",
+#     width = 5.5, height = 3)
+out_n2$est.att %>%
+  as_tibble(rownames = "rel_time") %>%
+  mutate(rel_time = as.integer(rel_time)) %>%
+  ggplot(aes(x= rel_time, y = ATT, group = 1)) +
+  geom_segment(x = 0, xend = 0, y = -0.03, yend = 0.01,
+  size = 2, color = "grey50") +
+  geom_ribbon(aes(ymin = CI.lower, ymax = CI.upper),
+              alpha = 0.3) +
+  geom_line(size = 1) +
+  geom_text(aes(x= rel_time, y = 0.015, label = n.Treated)) +
+  # geom_vline(xintercept = 0) +
+
+  geom_hline(yintercept = 0) +
+  labs(
+    # title = "ATT and number of treated regions",
+    x = "Years after the announcment of a LEZ",
+    y = "Change in GDP per capita (€)"
+  ) +
+  scale_x_continuous(breaks=seq(-10,8,2)) +
+  scale_y_continuous(
+    labels = scales::percent_format(accuracy = 1))
 # dev.off()
 ```
 
@@ -2873,15 +2965,18 @@ for (i in n3_dta[n3_dta$treated_uz == TRUE, ]$geo %>% unique()){
       labs(
         title = paste0(i, " - " ,n3_dta[n3_dta$geo == i,]$LEZ[1]),
         x = "Year",
-        y = "GDP per capita (€)"
-      )
+        y = "Change in share of GDP"
+      ) +
+    scale_y_continuous(
+      labels = scales::percent_format(accuracy = 1))
+    
     print(plot_i)
     # dev.off()
   }
 }
 ```
 
-> NOTE! Inaguration dates look wrong!
+
 
 
 #### Maps
