@@ -483,7 +483,7 @@ get_buffer_km <- function(data_points, km){
     st_transform(crs = "+proj=longlat +datum=WGS84")
 }
 
-buffer_80_uar <- get_buffer_km(uar_sf, 60)
+buffer_60_uar <- get_buffer_km(uar_sf, 60)
 
 # ! Note! I don't need to do a buffer of 50 and 100 km of small (city-center) urban access regulations.
 # I could restrict to do this for sizable LEZ
@@ -511,7 +511,7 @@ nuts.sf <- nuts.sf %>%
     with_uar_60km = ifelse(
       NUTS_ID %in% 
         (st_intersection(
-          nuts.sf_centroid, get_buffer_km(uar_sf, 60))$NUTS_ID %>%
+          nuts.sf, get_buffer_km(uar_sf, 60))$NUTS_ID %>%
            unique()),
       TRUE, FALSE),
     
@@ -578,6 +578,7 @@ ggplot(nuts.sf %>%
 #                 "<b> Name: </b>", 
 #                 nuts.sf_centroid$NUTS_NAME, "<br/>"))
 ```
+
 
 
 ### Get list of treated:
@@ -923,7 +924,7 @@ temp_treated <- nuts.sf.treated %>%
          LEVL_CODE == 3)
 
 temp_control <- nuts.sf.treated %>%
-  filter(contr_restr_60km == TRUE,
+  filter(with_umweltzonen_60km == FALSE,
          LEVL_CODE == 3)
 
 treated_and_controls <- leaflet() %>% 
@@ -950,10 +951,10 @@ treated_and_controls <- leaflet() %>%
   #              "<b> Source: </b> Umweltzonen")) %>% 
   setView(15, 50, zoom = 3)
 
-# treated_and_controls
+treated_and_controls
 
-htmlwidgets::saveWidget(treated_and_controls,
-                        file="map_tr_and_controls_nomark.html")
+# htmlwidgets::saveWidget(treated_and_controls,
+#                         file="map_tr_and_controls_nomark.html")
 ```
 
 For NUTS 2

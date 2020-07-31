@@ -280,6 +280,7 @@ All nuts 3 and nuts 2 regions that had multiple LEZ were excluded from this data
 ```{r}
 nuts_treated <- readRDS("data/nuts_sf_treated")
 
+
 nuts_treated <- nuts_treated %>%
   dplyr::rename(
     geo = NUTS_ID,
@@ -912,7 +913,6 @@ panel_zones <- all %>%
          #   month(date)<9, paste0("0", month(date)), month(date))),
          ) %>%
   arrange(Stage_3) %>%
-  arrange(Stage_2) %>%
   arrange(Stage_1) %>%
   arrange(Announcment) %>%
   mutate(LEZ_number = paste0(LEZ, " - ", num_id)) %>%
@@ -1111,14 +1111,14 @@ nuts_time %>%
   group_by(geo) %>%
   summarise_all(function(x){mean(x, na.rm =  TRUE)})
 
-temp <- data.frame(LEZ = c("Lübeck", "Cottbus", "Chemnitz"),
+controls_df <- data.frame(LEZ = c("Lübeck", "Cottbus", "Chemnitz"),
                    in_sample = rep("Control", 3),
                    gdp_mio_eur = c(2865, 6969, 6671),
                    lat = c(53.85678, 51.760325, 50.835651),
                    lon = c(10.67413, 14.325153, 12.929591)
                    )
 
-temp_sf <- temp %>%
+temp_sf <- controls_df %>%
   st_as_sf(coords = c("lon", "lat"),
            crs = "+proj=longlat +datum=WGS84 +no_defs")
 
@@ -1150,17 +1150,46 @@ germany2 <- nuts_treated %>%
   filter(country == "DE") %>%
   st_combine() %>% 
   st_union()
+
+nuts_treated_DE <- nuts_treated %>%
+  filter(country == "DE") %>%
+  filter(nuts_level == 3)
 ```
 
 
 ```{r, fig.height= 9, fig.width=7.5}
 library(scales)
 
+nuts_treatment_status_DE <- nuts.sf %>%
+  st_join(umweltzonen) %>%
+  filter(CNTR_CODE == "DE") %>%
+  filter(LEVL_CODE == 3) 
+
+nuts_treatment_status_DE
 pdf(file = "images/GermanNutsAndLEZ.pdf",
-    width = 7.5, height = 10)
+    width = 7.5, height = 10.5)
+
+# ggplot() +
+#   # geom_sf(data = germany2) +
+#   geom_sf(data = nuts_treated_DE, 
+#           aes(fill = "black"))
+
+# temp <- read_sf("data/NUTS3/ref-nuts-2016-01m") %>%
+#   select(-FID) %>%
+#   filter(LEVL_CODE %in% c(2, 3)) %>%
+#   st_make_valid()
+# 
+# mapview::mapView(temp %>% filter(LEVL_CODE == 3))
+
 
 ggplot() +
-  geom_sf(data = germany2) +
+  # geom_sf(data = germany2) +
+  geom_sf(data = nuts_treatment_status_DE, 
+          aes(fill = "black"),
+          show.legend = FALSE) +
+  geom_sf(data = nuts_treatment_status_DE %>% 
+            filter(with_umweltzonen_60km == FALSE), 
+          aes(fill = "")) +
   geom_sf(data = umweltzonen_pro, 
           aes(color = in_sample, size = gdp_mio_eur)) +
   # geom_sf_label(data = umweltzonen, 
@@ -1171,19 +1200,19 @@ ggplot() +
         y = long,
         label = num_id),
     size = 3,
-    min.segment.length = 0.4, 
+    min.segment.length = 0.4, segment.color = "white"
     # family = "Times New Roman"
     # arrow = arrow(length = unit(0.02, "npc"))
     # point.padding = NA
     # box.padding = unit(2, "lines")
   ) +
-  geom_label_repel(
-    data = temp,
+  ggrepel::geom_label_repel(
+    data = controls_df,
     aes(x = lon,
         y = lat,
         label = LEZ),
     size = 3,
-    min.segment.length = 0.4, 
+    min.segment.length = 0.4, segment.color = "white"
     # family = "Times New Roman"
     # arrow = arrow(length = unit(0.02, "npc"))
     # point.padding = NA
@@ -1192,20 +1221,24 @@ ggplot() +
   # Asthetics
   labs(x = "", y = "",
        color = "In Sample:",
-       size = "Regional GDP:"
+       size = "Regional GDP:",
+       fill = "Control Region"
        ) +
-  scale_size_continuous(labels = comma) +
+  scale_size_continuous(labels = scales::label_dollar(prefix = "€")) +
+  scale_fill_manual(values = c("grey70", "grey0"),
+                    labels = c("Yes", "No"),) +
   guides(color = guide_legend(reverse = TRUE)) +
   theme_bw() +
   theme(
     legend.spacing = unit(0.4, "cm"),
     legend.position= "top",
     # legend.box.margin = margin(l = -1, unit = "cm"),
-    legend.background = element_rect(color = "darkgray")
+    legend.background = element_rect(color = "darkgray"),
+    legend.box = "vertical"
   )
   
 
-dev.off()
+# dev.off()
 
   # coord_sf(crs = "+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +ellps=GRS80 +units=m +no_defs ")
 ```
