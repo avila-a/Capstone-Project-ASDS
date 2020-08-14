@@ -564,7 +564,7 @@ out_n2 <- gsynth(gdp_eur_hab ~ is_announced,
                EM = TRUE, # Gobillon and Magnac (takes a lot of time)
                inference = "parametric",
                # estimator = "mc",
-               nboots = 500,  #500
+               nboots = 1000,  #500
                parallel = TRUE, cores = 5, # if do parallel and how many cores
                min.T0 = 7) # Has to be larger than r.max+1
 
@@ -639,7 +639,7 @@ fact_ggplot <- plot(out_n2, type = "factors",
 # dev.off()
 
 # pdf(file="images/prelim_results/ATT_gdp_cap.pdf",
-    # width = 5.5, height = 3)
+#     width = 5.5, height = 3)
 out_n2$est.att %>%
   as_tibble(rownames = "rel_time") %>%
   mutate(rel_time = as.integer(rel_time)) %>%
@@ -680,7 +680,9 @@ out_n2$est.att %>%
 
 dta_for_summary <- n3_dta %>%
   select(geo, gdp_eur_hab, pop_km2, pop_total, treated_gz,
-         gva_rate_local_trade) %>%
+         gva_rate_local_trade, gva_rate_agriculture,
+         gva_rate_public, gva_rate_work,
+         gva_rate_construction, gva_rate_industry) %>%
   group_by(geo) %>%
   summarise_all(function(x){mean(x, na.rm = TRUE)}) %>%
   as.data.frame() %>%
@@ -690,9 +692,21 @@ dta_for_summary <- n3_dta %>%
 # install.packages("reporttools")  #Use this to install it, do this only once
 require(reporttools)
 
-vars <- dta_for_summary[,c('gdp_eur_hab', "pop_total",
-                           'pop_km2')]
+vars <- dta_for_summary[
+  ,c('gdp_eur_hab', 'pop_km2', 
+     "gva_rate_industry",
+     "gva_rate_construction",
+     "gva_rate_local_trade",
+     "gva_rate_agriculture",
+     "gva_rate_public",
+     "gva_rate_work")]
 group <- dta_for_summary[,c('treated_summ')]
+
+# Turn rate into percentages
+get_percentage <- function(x){x*100}
+
+vars <- vars %>%
+  mutate_at(vars(matches("gva")), get_percentage)
 
 ## display default statistics, only use a subset of observations, grouped analysis
 
@@ -882,15 +896,15 @@ plot_factor_paths <- out_n2$factor %>%
 #   )
 
 
-pdf(file="images/prelim_results/f_loadings.pdf",
-    width = 3, height = 3)
+# pdf(file="images/prelim_results/f_loadings.pdf",
+#     width = 3, height = 3)
 plot_weights 
-dev.off()
+# dev.off()
 
-pdf(file="images/prelim_results/factors_time.pdf",
-    width = 3, height = 3)
+# pdf(file="images/prelim_results/factors_time.pdf",
+#     width = 3, height = 3)
 plot_factor_paths
-dev.off()
+# dev.off()
 ```
 
 Regarding factors' evolution:
@@ -1053,8 +1067,8 @@ dev.off()
 
 # # Factor 2 ¿ Center germany VS hanburg + Duserldof + Stuttgart?
 
-pdf(file="images/prelim_results/factor_2_map.pdf",
-    width = 3, height = 3)
+# pdf(file="images/prelim_results/factor_2_map.pdf",
+#     width = 3, height = 3)
 tm_shape(germany) +
   tm_polygons() +
 tm_shape(factor_weights) +
@@ -1062,8 +1076,8 @@ tm_shape(factor_weights) +
 tm_shape(factor_weights %>% filter(treatment == "Treated")) +
   tm_borders(col = "black") +
   tm_layout(legend.bg.color = "white",
-            legend.outside = TRUE)
-dev.off()
+            legend.outside = TRUE, frame = FALSE)
+# dev.off()
 
 # leaflet() %>% addTiles() %>%
 #   addPolygons(data = factor_weights, 
@@ -1808,7 +1822,7 @@ out_n2 <- gsynth(gdp_eur_hab ~ is_treated_3y,
                EM = TRUE, # Gobillon and Magnac (takes a lot of time)
                inference = "parametric",
                # estimator = "mc",
-               nboots = 300,  #500
+               nboots = 1000,  #500
                parallel = TRUE, cores = 5, # if do parallel and how many cores
                min.T0 = 6) # Has to be larger than r.max+1
 
@@ -1884,7 +1898,7 @@ out_n2 <- gsynth(gdp_eur_hab ~ is_treated,
                EM = TRUE, # Gobillon and Magnac (takes a lot of time)
                inference = "parametric",
                # estimator = "mc",
-               nboots = 500,  #500
+               nboots = 1000,  #500
                parallel = TRUE, cores = 5, # if do parallel and how many cores
                min.T0 = 7) # Has to be larger than r.max+1
 
@@ -1918,11 +1932,11 @@ ATT_plot <- out_n2$est.att %>%
   )
 
 {
-pdf(file=
-      paste0("images/prelim_results/plac2011/ATT_inv_real.pdf"),
-    width = 5.5, height = 3)
+# pdf(file=
+#       paste0("images/prelim_results/plac2011/ATT_inv_real.pdf"),
+#     width = 5.5, height = 3)
 print(ATT_plot)
-dev.off()
+# dev.off()
 }
 
 # # plot all data:
@@ -1976,7 +1990,9 @@ plot(out_n2, type = "factors")
 
 dta_for_summary <- fake_tr_dta_real %>%
   select(geo, gdp_eur_hab, pop_km2, pop_total, treated_gz,
-         gva_rate_local_trade) %>%
+         gva_rate_local_trade, gva_rate_agriculture,
+         gva_rate_public, gva_rate_work,
+         gva_rate_construction, gva_rate_industry) %>%
   group_by(geo) %>%
   summarise_all(function(x){mean(x, na.rm = TRUE)}) %>%
   as.data.frame() %>%
@@ -1986,15 +2002,27 @@ dta_for_summary <- fake_tr_dta_real %>%
 # install.packages("reporttools")  #Use this to install it, do this only once
 require(reporttools)
 
-vars <- dta_for_summary[,c('gdp_eur_hab', #'pop_total',
-                           'pop_km2')]
+vars <- dta_for_summary[
+  ,c('gdp_eur_hab', 'pop_km2', 
+     "gva_rate_industry",
+     "gva_rate_construction",
+     "gva_rate_local_trade",
+     "gva_rate_agriculture",
+     "gva_rate_public",
+     "gva_rate_work")]
 group <- dta_for_summary[,c('treated_summ')]
+
+# Turn rate into percentages
+get_percentage <- function(x){x*100}
+
+vars <- vars %>%
+  mutate_at(vars(matches("gva")), get_percentage)
 
 ## display default statistics, only use a subset of observations, grouped analysis
 
 result <- tableContinuous(vars = vars, group = group, 
                 stats = c("n", "min", "mean", "max", "s"),
-                prec = 0,font.size = "small",
+                prec = 1,font.size = "small",
                 # print.pval = "anova",
                 cap = "Summary statistics for potential effect on GDP/capita",
                 lab = "tab: descr stat inv2012",
@@ -2231,10 +2259,10 @@ tm_map_w
 }
 
 {
-pdf(file=paste0("images/prelim_results/plac2011/w_map_2.pdf"),
-    width = 4, height = 3)
+# pdf(file=paste0("images/prelim_results/plac2011/w_map_2.pdf"),
+#     width = 4, height = 3)
 tm_map_w
-dev.off()
+# dev.off()
 }
 
 ```
@@ -2354,12 +2382,14 @@ for (i in n3_dta[n3_dta$treated_uz == TRUE, ]$geo %>% unique()){
                      n3_dta[n3_dta$geo == i,]$geo[1]),
        sub = "Pre-intervention placebo of 4 years",
        xlab = "Year",
-       ylab = "Trade' share of GDP") 
+       ylab = "Trade' share of GVA") 
   
   final_plot <- placebo_plot + 
     scale_x_continuous(labels = 
                          scales::number_format(accuracy = 1,
-                                               big.mark = ""))
+                                               big.mark = "")) +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+    theme(axis.text.x = element_text(hjust=0.5))
   # pdf(file=paste0("images/prelim_results/trade/ind_placebo",
   #                 "_",  i, ".pdf"),
   #     width = 3.5, height = 3.1)
@@ -2423,7 +2453,7 @@ out_n2 <- gsynth(gva_rate_local_trade ~ is_announced,
                EM = TRUE, # Gobillon and Magnac (takes a lot of time)
                inference = "parametric",
                # estimator = "mc",
-               nboots = 300,  #500
+               nboots = 1000,  #500
                parallel = TRUE, cores = 5, # if do parallel and how many cores
                min.T0 = 6) # Has to be larger than r.max+1
 
@@ -2470,9 +2500,12 @@ for (i in n3_dta[n3_dta$treated_uz == TRUE, ]$geo %>% unique()){
       labs(
         title = paste0(n3_dta[n3_dta$geo == i,]$LEZ[1], 
                        " and SC"),
-        y = "Trade' share of GDP",
+        y = "Trade' share of GVA",
         x  = "Year"
-      )
+      ) +
+      scale_y_continuous(labels = 
+                           scales::percent_format(accuracy = 1)) +
+  theme(axis.text.x = element_text(hjust=0.5))
     )
     # dev.off()
   }
@@ -2513,7 +2546,9 @@ out_n2$est.att %>%
     x = "Years after the announcment of a LEZ",
     y = "Change in GDP per capita (€)"
   ) +
-  scale_x_continuous(breaks=seq(-10,8,2)) 
+  scale_x_continuous(breaks=seq(-10,8,2)) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1))+
+  theme(axis.text.x = element_text(hjust=0.5))
 # dev.off()
 ```
 
@@ -2530,11 +2565,13 @@ What are the caracteristics of these cities?
 #### Sum Stat
 
 ```{r}
-library(stargazer)
+# library(stargazer)
 
 dta_for_summary <- n3_dta %>%
-  select(geo, gva_rate_local_trade, pop_km2, pop_total, treated_gz,
-         gva_rate_work) %>%
+  select(geo, gdp_eur_hab, pop_km2, pop_total, treated_gz,
+         gva_rate_local_trade, gva_rate_agriculture,
+         gva_rate_public, gva_rate_work,
+         gva_rate_construction, gva_rate_industry) %>%
   group_by(geo) %>%
   summarise_all(function(x){mean(x, na.rm = TRUE)}) %>%
   as.data.frame() %>%
@@ -2544,16 +2581,27 @@ dta_for_summary <- n3_dta %>%
 # install.packages("reporttools")  #Use this to install it, do this only once
 require(reporttools)
 
-vars <- dta_for_summary[,c("gva_rate_local_trade", 
-                           'gva_rate_work', #"pop_total",
-                           'pop_km2')]
+vars <- dta_for_summary[
+  ,c('gdp_eur_hab', 'pop_km2', 
+     "gva_rate_industry",
+     "gva_rate_construction",
+     "gva_rate_local_trade",
+     "gva_rate_agriculture",
+     "gva_rate_public",
+     "gva_rate_work")]
 group <- dta_for_summary[,c('treated_summ')]
+
+# Turn rate into percentages
+get_percentage <- function(x){x*100}
+
+vars <- vars %>%
+  mutate_at(vars(matches("gva")), get_percentage)
 
 ## display default statistics, only use a subset of observations, grouped analysis
 
 result <- tableContinuous(vars = vars, group = group, 
                 stats = c("n", "min", "mean", "max", "s"),
-                prec = 3,font.size = "small",
+                prec = 1,font.size = "small",
                 # print.pval = "anova",
                 cap = "Summary statistics for effect on sectors",
                 lab = "tab: descr stat sectors",
@@ -2563,6 +2611,7 @@ result <- tableContinuous(vars = vars, group = group,
 
 cat(gsub("\\\\hline\n[^\n]+& all &[^\n]+\n", "", result))
 ```
+
 
 ##### Support for predictors
 
@@ -2580,30 +2629,6 @@ panelView(gva_rate_local_trade ~ is_announced, data = n3_dta,
 #### Factor analysis
 
 ```{r}
-# Know the donor pool of each treated:
-weights_result <- out_n2$wgt.implied %>% 
-  as_tibble(rownames = "NUTS_ID")
-
-# temp <- n2_dta %>%
-#   left_join(weights_result, by = c("geo" = "NUTS_ID")) %>%
-#   # filter(treated_uz == TRUE)
-#   filter(geo == "DE30" | !(is.na(DE30))) %>%
-#   filter(time >= 2000 & time <= 2008) %>%
-#   group_by(geo == "DE30", time) %>%
-#   mutate(DE30 = DE30-mean(DE30)/sd(DE30)) %>%
-#   mutate(DE30 = ifelse(geo == "DE30", mean(DE30, na.rm = TRUE), DE30)) %>%
-#   dplyr::summarise(mean_unem = weighted.mean(gdp_eur_hab, 
-#                                              DE30, na.rm = TRUE))
-# # %>%
-# #   pivot_wider(id_cols = time, names_from = `geo == "DE30"`,
-# #               values_from = mean_unem)
-# 
-#   select(geo, time, DE30, unempR_T); temp
-# temp
-# temp %>%
-#   ggplot() +
-#   geom_line(aes(x= time, y = mean_unem, color = `geo == "DE30"`))
-# 
 # out_n2$lambda.co # estimated loadings of each factor
 out_n2$lambda.tr # estimated loadings of each factor
 # out_n2$wgt.implied
@@ -2611,6 +2636,131 @@ out_n2$lambda.tr # estimated loadings of each factor
 # MASS::ginv(t(as.matrix(out_n2$lambda.tr)))
 plot(out_n2, type = "factors", theme.bw = TRUE)
 plot(out_n2, type = "loadings")
+```
+
+
+```{r}
+# Know the donor pool of each treated:
+weights_result <- out_n2$wgt.implied %>% 
+  as_tibble(rownames = "NUTS_ID")
+
+# get data on weights
+weights <- out_n2$lambda.co  %>%
+  as_tibble(rownames = "geo") %>%
+  mutate(Group = "Control") %>%
+  rbind(out_n2$lambda.tr %>%
+          as_tibble(rownames = "geo") %>%
+          mutate(Group = "Treated")) %>%
+  mutate_if(is.numeric, function(x){(x-mean(x))/sd(x)})
+
+# Get codes from umweltzonen
+umweltzonen <- readRDS("data/umweltbundesamt/umweltzonen.rds")
+# dbGetQuery(db, "SELECT * from umweltzonen")
+
+um <- umweltzonen %>%
+  mutate(Stage_1 = as.Date(Stage_1, "%d.%m.%Y"),
+         Stage_2 = as.Date(Stage_2, "%d.%m.%Y"),
+         Stage_3 = as.Date(Stage_3, "%d.%m.%Y"),
+         Announcment = as.Date(Announcment)) %>%
+  mutate(Announcment = if_else(is.na(Announcment), 
+                               Stage_1, Announcment)) %>%
+  arrange(Stage_3) %>%
+  arrange(Stage_2) %>%
+  arrange(Stage_1) %>%
+  arrange(Announcment) %>%
+  mutate(num_id = 1:n())
+
+
+geos_num <- um %>%
+  select(LEZ, num_id) %>%
+  left_join(main_dta) %>%
+  select(LEZ, num_id, geo) %>% 
+  unique() %>% as.data.frame()
+
+# New facet label names for supp variable
+Factor.labs <- c("Factor 1", "Factor 2",
+                          "Factor 3", "Factor 4")
+names(Factor.labs) <- c("r1", "r2", "r3", "r4")
+
+weights_ggplot <- weights %>%
+  left_join(geos_num) %>%
+  pivot_longer(cols = r1:r4, names_to = "Factor") %>%
+  mutate(Factor = forcats::fct_recode(Factor, "Factor 1" = "r1",
+                           "Factor 2" = "r2",
+                           "Factor 3" = "r3",
+                           "Factor 4" = "r4"
+                           ))
+
+weights_hist <- ggplot(weights_ggplot) +
+  geom_histogram(aes(x = value, fill = Group)) +
+  ggrepel::geom_text_repel(data = weights_ggplot %>%
+                             filter(value >2),
+                           aes(x = value, y = 1,
+                                label = LEZ), 
+                           angle = 90, 
+                           # direction = "x",
+                           ylim = c(2,6),
+                           nudge_y = 2, size = 3,
+                           nudge_x = 0.5, point.padding = 0.2
+                           # min.segment.length = 2
+                           # segment.size = 1
+                           ) +
+  # https://cran.r-project.org/web/packages/ggrepel/vignettes/ggrepel.html
+  facet_wrap(~Factor, nrow = 1) +
+  theme_bw() +
+  theme(legend.position = "bottom") +
+  labs(x = "Factor Loading", y = "",
+       fill = "") +
+  scale_y_continuous(breaks = seq(0,9,1))
+
+
+plot_factor_paths <- out_n2$factor %>%
+  as_tibble(rownames = "year") %>%
+  mutate_if(is.numeric, function(x){(x-mean(x))/sd(x)}) %>%
+  mutate(year = as.integer(year)) %>%
+  pivot_longer(cols = r1:r4, 
+               values_to = "value", names_to = "factor") %>%
+  mutate(factor = forcats::fct_recode(factor, "1" = "r1",
+                           "2" = "r2",
+                           "3" = "r3",
+                           "4" = "r4"
+                           )) %>%
+  ggplot() +
+  geom_line(aes(x= year, y = value, 
+                color = factor,
+                # linetype = factor,
+                # size = 0.001
+  )) +
+  geom_point(aes(x= year, y = value, 
+                color = factor, shape = factor,
+                # linetype = factor,
+                # size = 0.001
+  )) +
+  geom_hline(yintercept = 0)+
+  # pretty
+  labs(
+    x = "Year",
+    y = "Estimate",
+    color = "Factor",
+    shape = "Factor"
+  ) +
+  # scale_color_brewer(palette="Set1") +
+  theme_bw() +
+  theme(legend.position = "bottom")
+plot_factor_paths
+
+
+
+pdf(file="images/prelim_results/trade/f_loadings.pdf",
+    width = 4.5, height = 2.7)
+weights_hist
+dev.off()
+
+pdf(file="images/prelim_results/trade/factors_time.pdf",
+    width = 3, height = 3)
+plot_factor_paths
+dev.off()
+
 ```
 
 Regarding factors' evolution:
@@ -2642,7 +2792,7 @@ for (i in n3_dta[n3_dta$treated_uz == TRUE, ]$geo %>% unique()){
       labs(
         title = paste0(i, " - " ,n3_dta[n3_dta$geo == i,]$LEZ[1]),
         x = "Year",
-        y = "Differences in Trade' share of GDP"
+        y = "Differences in Trade' share of GVA"
       ) +
       scale_y_continuous(labels = scales::percent_format(accuracy = 1))
     print(plot_i)
@@ -2673,7 +2823,7 @@ range_controls <- nuts_treated %>%
   filter(NUTS_ID %in% out_n2$id.co) %>%
   filter(CNTR_CODE != "FR")
 
-osm_units_europe <- tmaptools::read_osm(range_controls, ext=1.1)
+# osm_units_europe <- tmaptools::read_osm(range_controls, ext=1.1)
 
 donor_pool %>% as.data.frame() %>%
   select(NUTS_ID, DEA15) %>%
@@ -2712,13 +2862,16 @@ factor_weights <- rbind(out_n2$lambda.co, out_n2$lambda.tr) %>%
 
 factor_weights <- nuts_treated %>%
   right_join(factor_weights) %>%
-  select(NUTS_ID, treatment, r1, r2, r3) %>%
-  rename(c("Factor 1" = r1, "Factor 2" = r2, "Factor 3" = r3))
+  select(NUTS_ID, treatment, r1, r2, r3, r4) %>%
+  rename(c("Factor 1" = r1, "Factor 2" = r2, 
+           "Factor 3" = r3, "Factor 4" = r4))
 
 
 
 # # Factor 1, Rural - VS - Urban "economy" (or more gdp_capita) 
-
+# 
+# pdf(file="images/prelim_results/trade/factor_1_map.pdf",
+#     width = 2.8, height = 3)
 tm_shape(germany) +
   tm_polygons() +
 tm_shape(factor_weights) +
@@ -2726,7 +2879,11 @@ tm_shape(factor_weights) +
 tm_shape(factor_weights %>% filter(treatment == "Treated")) +
   tm_borders(col = "black") +
   tm_layout(legend.bg.color = "white", 
-            legend.position = c("right", "top"))
+            legend.position = c("right", "bottom"),
+            legend.outside = TRUE, 
+            frame = FALSE
+            )
+# dev.off()
 
 # leaflet() %>% addTiles() %>%
 #   addPolygons(data = factor_weights, 
@@ -2748,19 +2905,21 @@ tm_shape(factor_weights %>% filter(treatment == "Treated")) +
 outcome_means <- apply(cbind(out_n2$Y.tr, out_n2$Y.co), 2, mean) %>%
   as_tibble(rownames = "NUTS_ID")
 
-# pdf(file="images/prelim_results/factor_1_gdp.pdf",
-#     width = 3, height = 4)
+# pdf(file="images/prelim_results/trade/factor_1_propGVA.pdf",
+#     width = 3, height = 3)
 factor_weights %>%
   left_join(outcome_means) %>% as.data.frame() %>%
   ggplot() +
   geom_point(aes(x = `Factor 1`, y = value)) +
-  labs(x = "Factor 1", y = "Mean prop. GVA (€)")
+  labs(x = "Factor 1", y = "Mean prop. GVA") +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  theme_bw()
 # dev.off()
 
 # # Factor 2 ¿ Center germany VS hanburg + Duserldof + Stuttgart?
 
-# pdf(file="images/prelim_results/factor_2_map.pdf",
-#     width = 3, height = 4)
+# pdf(file="images/prelim_results/trade/factor_2_map.pdf",
+#     width = 2.8, height = 3)
 tm_shape(germany) +
   tm_polygons() +
 tm_shape(factor_weights) +
@@ -2768,7 +2927,10 @@ tm_shape(factor_weights) +
 tm_shape(factor_weights %>% filter(treatment == "Treated")) +
   tm_borders(col = "black") +
   tm_layout(legend.bg.color = "white", 
-            legend.position = c("right", "top"))
+            legend.position = c("right", "bottom"),
+            legend.outside = TRUE, 
+            frame = FALSE
+            )
 # dev.off()
 
 # leaflet() %>% addTiles() %>%
@@ -2790,8 +2952,8 @@ tm_shape(factor_weights %>% filter(treatment == "Treated")) +
 
 ## Factor 3 ??? NO IDEA
 
-# pdf(file="images/prelim_results/factor_3_map.pdf",
-#     width = 3, height = 4)
+# pdf(file="images/prelim_results/trade/factor_3_map.pdf",
+#     width = 2.8, height = 3)
 tm_shape(germany) +
   tm_polygons() +
 tm_shape(factor_weights) +
@@ -2799,7 +2961,10 @@ tm_shape(factor_weights) +
 tm_shape(factor_weights %>% filter(treatment == "Treated")) +
   tm_borders(col = "black") +
   tm_layout(legend.bg.color = "white", 
-            legend.position = c("right", "top"))
+            legend.position = c("right", "bottom"),
+            legend.outside = TRUE, 
+            frame = FALSE
+            )
 # dev.off()
 
 
@@ -2818,6 +2983,31 @@ tm_shape(factor_weights %>% filter(treatment == "Treated")) +
 #                 "<b> Weight 3 </b>", 
 #                 factor_weights$r3, "<br/>")
 #               )
+
+# pdf(file="images/prelim_results/trade/factor_4_map.pdf",
+#     width = 2.8, height = 3)
+tm_shape(germany) +
+  tm_polygons() +
+tm_shape(factor_weights) +
+  tm_polygons(col = "Factor 4") +
+tm_shape(factor_weights %>% filter(treatment == "Treated")) +
+  tm_borders(col = "black") +
+  tm_layout(legend.bg.color = "white", 
+            legend.position = c("right", "bottom"),
+            legend.outside = TRUE, 
+            frame = FALSE
+            )
+# dev.off()
+
+
+# tm_shape(germany) +
+#   tm_polygons() +
+# tm_shape(factor_weights) +
+#   tm_polygons(col = "Factor 2") +
+# tm_shape(factor_weights %>% filter(treatment == "Treated")) +
+#   tm_borders(col = "black") +
+#   tm_layout(legend.bg.color = "white",
+#             legend.outside = TRUE, frame = FALSE)
   
 ```
 

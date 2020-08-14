@@ -909,9 +909,10 @@ nuts.sf.treated %>%
 ## Save the data
 
 ```{r}
-## st_write(obj = nuts.sf.treated, "data/nuts_sf.shp", 
-# delete_layer = TRUE)
+# st_write(obj = nuts_sf, "data/nuts_sf.shp",
+#          delete_layer = TRUE)
 
+# saveRDS(nuts.sf, "data/nuts_sf") (not runned)
 # saveRDS(nuts.sf.treated, "data/nuts_sf_treated")
 # nuts.sf.treated <- readRDS("data/nuts_sf_treated")
 ```

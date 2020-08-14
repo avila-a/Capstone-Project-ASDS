@@ -193,12 +193,12 @@ nuts_time <- nuts_time %>%
          empl_rate_entretainment = `empl_R-U`/empl_TOTAL)
 
 nuts_time <- nuts_time %>%
-  mutate(gva_rate_agriculture = gva_A/gva_tot,
-         gva_rate_industry = `gva_B_E`/gva_tot,
-         gva_rate_construction = `gva_F`/gva_tot, 
+  mutate(gva_rate_agriculture = gva_A/gva_tot, # Agriculture, forestry and fishing
+         gva_rate_industry = `gva_B_E`/gva_tot, # Industry (except construction)
+         gva_rate_construction = `gva_F`/gva_tot, # Construction
          gva_rate_local_trade = `gva_G_J`/gva_tot,#  Wholesale and retail trade, transport, accommodation and food service activities
-         gva_rate_work = `gva_K_N`/gva_tot,
-         gva_rate_public = `gva_O_U`/gva_tot)
+         gva_rate_work = `gva_K_N`/gva_tot, # Financial and insurance activities; real estate activities; professional, scientific and technical activities; administrative and support service activities
+         gva_rate_public = `gva_O_U`/gva_tot) # Public administration and defence; compulsory social security; education; human health and social work activities; arts, entertainment and recreation; other service activities; activities of household and extra-territorial organizations and bodies
 
 nuts_time %>%
   filter(substr(geo, 1, 2) == "DE") %>%
@@ -889,6 +889,8 @@ panel_zones <- all %>%
          # LEZ = substr(LEZ, 1, 24),
          LEZ = sub(" *\\(.*", "", LEZ), # Everything until a "("
          # If i don't have the date of announcemnt I do as if there were none
+         LEZ = sub("und Umgebung", "", LEZ), # Everything until a "("
+         # If i don't have the date of announcemnt I do as if there were none
          Announcment = if_else(is.na(Announcment), Stage_1, Announcment),
          
          status = case_when(
@@ -944,8 +946,8 @@ pv_timeline <- panelView(month ~ status, data = panel_zones,
                     "yellow1", "green4")) +
   theme(legend.box.margin = margin(l = -5, unit = "cm"))
 
-png(filename = "images/LEZ application germany_3.png",
-    width = 780, height = 1000, res = 100)
+# png(filename = "images/LEZ application germany_3.png",
+#     width = 780, height = 1000, res = 100)
 
 pv_timeline +
   # # Black vertical segments (+.5 because the graph starts at 1)
@@ -1040,7 +1042,7 @@ dev.off()
 
 # png(filename = "images/LEZ application germany_clean.png",
 #     width = 780, height = 1000, res = 100)
-# pv_timeline
+pv_timeline
 # dev.off()
 
 # devtools::install_github('xuyiqing/panelView')
@@ -1160,12 +1162,18 @@ nuts_treated_DE <- nuts_treated %>%
 ```{r, fig.height= 9, fig.width=7.5}
 library(scales)
 
+# Careful! This NUTS-SF is the one after all the "Umparse UAR php" R file is run and before some duplicate redions are excluded.
 nuts_treatment_status_DE <- nuts.sf %>%
   st_join(umweltzonen) %>%
   filter(CNTR_CODE == "DE") %>%
-  filter(LEVL_CODE == 3) 
+  filter(LEVL_CODE == 3)
 
-nuts_treatment_status_DE
+nuts_treatment_status_DE %>% plot(max.plot = 2)
+```
+
+
+```{r, fig.height= 9, fig.width=7.5}
+
 pdf(file = "images/GermanNutsAndLEZ.pdf",
     width = 7.5, height = 10.5)
 
@@ -1224,7 +1232,9 @@ ggplot() +
        size = "Regional GDP:",
        fill = "Control Region"
        ) +
-  scale_size_continuous(labels = scales::label_dollar(prefix = "€")) +
+  scale_size_area(max_size = 12, 
+                  labels = scales::label_dollar(prefix = "€")) +
+  # scale_size_continuous() +
   scale_fill_manual(values = c("grey70", "grey0"),
                     labels = c("Yes", "No"),) +
   guides(color = guide_legend(reverse = TRUE)) +
@@ -1235,12 +1245,28 @@ ggplot() +
     # legend.box.margin = margin(l = -1, unit = "cm"),
     legend.background = element_rect(color = "darkgray"),
     legend.box = "vertical"
-  )
+  ) +
+  update_geom_defaults("point", list(size = 9))
   
 
-# dev.off()
+dev.off()
 
   # coord_sf(crs = "+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +ellps=GRS80 +units=m +no_defs ")
+```
+
+
+```{r}
+p <- ggplot(mpg, aes(displ, hwy, size = hwy)) +
+   geom_point()
+p
+p + scale_size("Highway mpg")
+p + scale_size(range = c(0, 10))
+
+# If you want zero value to have zero size, use scale_size_area:
+p + scale_size_area()
+
+# Binning can sometimes make it easier to match the scaled data to the legend
+p + scale_size_binned()
 ```
 
 
