@@ -1,4 +1,4 @@
-# Capstone project for ASDS
+# Readme:
 
 This repository includes all major work done for the capstone project of the MSc in Applied Social Data Science from LSE. 
 In that sense, it not only includes the files needed to run the final analysis but it includes almost all analysis done in the research process.
@@ -19,10 +19,12 @@ In that sense, it not only includes the files needed to run the final analysis b
   + Extra data for the actual geographies of LEZ for some cities was gathered from the Open Street Map Servers in the file `Download LEZ OSM.Rmd`
   + Non-strictly spatial data is aggregated by time and NUTS3 region in a SQL database on `create SQL db.Rmd`
 
+
 * Main analysis code, after downloading the data:
   + First analysis were performed in `Analysis LEZ 2.Rmd` with multiple methodologies.
   + Final analysis with the Generalized Synthetic Control Method are coded in `Analysis Gsynth n3.Rmd` 
   + Geospatial manipulation to construct a well defined control pool is in `Unparse UAR php.Rmd`,
+
 
 * Results
   + Images of results, robustness tests and diagnostics displayed on the main document are found in `images/prelim_results`
@@ -34,7 +36,7 @@ In that sense, it not only includes the files needed to run the final analysis b
 * Extras not included in the main text:
   + Unfinished code to gather air pollution data for almost all public available air quality stations in Europe is in `Pollution data`
   + Multiple codes where the analysis is done with the MASC method from Mellace and Pasquini (2019). This was not included in 
-  the main results as the data for air pollution was too noisy.
+  the main results as the data for air pollution was too noisy. The code is not available here but feel free to contact me if interested.
   
   For contact and further doubts feel free to add an issue or contact me directly at A.Avila2@lse.ac.uk.
     
