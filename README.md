@@ -4,6 +4,7 @@ This repository includes all major work done for the capstone project of the MSc
 In that sense, it not only includes the files needed to run the final analysis but it includes almost all analysis done in the research process.
 
 #### Notes:
++ Some methods and code that include non-public work from other researchers are not included.
 + Some large files are not included for lack of space but can be retreived with the code provided.
 + Almost all code files come toguether with an html file that has all the results rendered from the last time they were runned
 
