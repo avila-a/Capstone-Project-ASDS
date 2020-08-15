@@ -10,9 +10,9 @@ In that sense, it not only includes the files needed to run the final analysis b
 
 ## Guide on the repository:
 
-* Final text with bases, analysis and results can be found at `Presentations and documents/Capstone_project__German_LEZ_`
+* Final text with bases, analysis and results can be found at `Presentations and documents/Capstone_project__German_LEZ.pdf`
 
-* Main sources of data
+###  Main sources of data:
   + Data on GDP and economic controls comes from Eurostat. This is downloaded with the `Download Eurostat.Rmd` file.
   + Data on the treatment status of German and European region was gathered from two sources:
     - The German Entironment Agency (in `data/umweltbundesamt/umweltzonen`)
@@ -21,21 +21,21 @@ In that sense, it not only includes the files needed to run the final analysis b
   + Non-strictly spatial data is aggregated by time and NUTS3 region in a SQL database on `create SQL db.Rmd`
 
 
-* Main analysis code, after downloading the data:
+### Main analysis code, after downloading the data:
   + First analysis were performed in `Analysis LEZ 2.Rmd` with multiple methodologies.
   + Final analysis with the Generalized Synthetic Control Method are coded in `Analysis Gsynth n3.Rmd` 
   + Geospatial manipulation to construct a well defined control pool is in `Unparse UAR php.Rmd`,
 
 
-* Results
+### Results:
   + Images of results, robustness tests and diagnostics displayed on the main document are found in `images/prelim_results`
   + Other context images are simply on the `images/` folder.
   + Interactive maps are also available:
     - `policy_map.html` displays the data from The urbanaccessregulations.eu/ website and the `Green Zones` app.
     - `map_tr_and_controls_.html` Shows the treatment and control NUTS3 regions with their details and ids.
   
-* Extras not included in the main text:
-  + Unfinished code to gather air pollution data for almost all public available air quality stations in Europe is in `Pollution data`
+## Extras, not included in the main text:
+  + Unfinished code to gather air pollution data for almost all public available air quality stations in Europe is in `/Pollution data`
   + Multiple codes where the analysis is done with the MASC method from Mellace and Pasquini (2019). This was not included in 
   the main results as the data for air pollution was too noisy. The code is not available here but feel free to contact me if interested.
   
