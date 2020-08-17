@@ -1,5 +1,3 @@
-# Guide:
-
 This repository includes all major work done for the capstone project of the MSc in Applied Social Data Science from LSE. 
 In that sense, it not only includes the files needed to run the final analysis but it includes almost all analysis done in the research process.
 
