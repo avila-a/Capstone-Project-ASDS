@@ -5,6 +5,11 @@ In that sense, it not only includes the files needed to run the final analysis b
 + Some methods and code that include non-public work from other researchers are not included.
 + Some large files are not included for lack of space but can be retreived with the code provided.
 + Almost all code files come toguether with an html file that has all the results rendered from the last time they were runned
++ Interactive maps are also available:
+  - `policy_map.html` displays the data from The urbanaccessregulations.eu/ website and the `Green Zones` app. 
+    +  [Interactive link - click on cities to see the policy implemented and the source of the data](htmlpages/policymap)
+  - `map_tr_and_controls_.html` Shows the treatment (red) and control (blue) NUTS3 regions with their details and ids. It also shows the limits for some LEZ downloaded from OpenStreetMap.org.
+    +  [Interactive link - click on cities to see the year of implementation and announcment year](htmlpages/treatedcontrol)
 
 ## Guide on the repository:
 
@@ -24,15 +29,9 @@ In that sense, it not only includes the files needed to run the final analysis b
   + Final analysis with the Generalized Synthetic Control Method are coded in `Analysis Gsynth n3.Rmd` 
   + Geospatial manipulation to construct a well defined control pool is in `Unparse UAR php.Rmd`,
 
-
 ### Results:
   + Images of results, robustness tests and diagnostics displayed on the main document are found in `images/prelim_results`
   + Other context images are simply on the `images/` folder.
-  + Interactive maps are also available:
-    - `policy_map.html` displays the data from The urbanaccessregulations.eu/ website and the `Green Zones` app. 
-      +  [Interactive link - click on cities to see the policy implemented and the source of the data](htmlpages/policymap)
-    - `map_tr_and_controls_.html` Shows the treatment (red) and control (blue) NUTS3 regions with their details and ids. It also shows the limits for some LEZ downloaded from OpenStreetMap.org.
-      +  [Interactive link - click on cities to see the year of implementation and announcment year](htmlpages/treatedcontrol)
   
 ## Extras, not included in the main text:
   + Unfinished code to gather air pollution data for almost all public available air quality stations in Europe is in `/Pollution data`
