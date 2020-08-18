@@ -29,7 +29,7 @@ In that sense, it not only includes the files needed to run the final analysis b
   + Images of results, robustness tests and diagnostics displayed on the main document are found in `images/prelim_results`
   + Other context images are simply on the `images/` folder.
   + Interactive maps are also available:
-    - `policy_map.html` displays the data from The urbanaccessregulations.eu/ website and the `Green Zones` app.
+    - `policy_map.html` displays the data from The urbanaccessregulations.eu/ website and the `Green Zones` app. [link](/htmlpages/policymap)
     - `map_tr_and_controls_.html` Shows the treatment and control NUTS3 regions with their details and ids.
   
 ## Extras, not included in the main text:
