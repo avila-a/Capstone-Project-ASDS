@@ -1,4 +1,4 @@
-# :heavy_check_mark: Notes on capstone project
+# Notes on capstone project
 
 
 

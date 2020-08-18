@@ -107,7 +107,7 @@ Control for possible confounders:
       * nº of personal cars by municipality
       * Decommissioning of vehicles by age (all germany)
       * nº of vehicles by env. sticker by month and federal state
-      * nº of scrapped cars by district 
+      * **nº of scrapped cars by district** 
     * :bulb: I could ask for the data from Wolff (2013) or some specific data from the German office ([link](https://www.kba.de/DE/Statistik/Forschungsdatenzentrum/forschungsdatenzentrum_node.html))  $\rightarrow$ *district-wise number scrappaged cars more than 9y old from January to September 2009*
 
 * Possible estimates of relative expenditure in the scrappage program with the data I can get:
