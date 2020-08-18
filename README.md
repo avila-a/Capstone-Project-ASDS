@@ -30,9 +30,9 @@ In that sense, it not only includes the files needed to run the final analysis b
   + Other context images are simply on the `images/` folder.
   + Interactive maps are also available:
     - `policy_map.html` displays the data from The urbanaccessregulations.eu/ website and the `Green Zones` app. 
-      +  [Interactive link - click on cities to see the policy implemented and the source of the data](Capstone-Project-ASDS/htmlpages/policymap)
+      +  [Interactive link - click on cities to see the policy implemented and the source of the data](htmlpages/policymap)
     - `map_tr_and_controls_.html` Shows the treatment (red) and control (blue) NUTS3 regions with their details and ids. It also shows the limits for some LEZ downloaded from OpenStreetMap.org.
-      +  [Interactive link - click on cities to see the year of implementation and announcment year](Capstone-Project-ASDS/htmlpages/treatedcontrol)
+      +  [Interactive link - click on cities to see the year of implementation and announcment year](htmlpages/treatedcontrol)
   
 ## Extras, not included in the main text:
   + Unfinished code to gather air pollution data for almost all public available air quality stations in Europe is in `/Pollution data`
