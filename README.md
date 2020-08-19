@@ -8,8 +8,8 @@ In that sense, it not only includes the files needed to run the final analysis b
 + Interactive maps are also available:
   - `policy_map.html` displays the data from The urbanaccessregulations.eu/ website and the `Green Zones` app. 
     +  [Interactive link - click on cities to see the policy implemented and the source of the data](htmlpages/policymap)
-  - `map_tr_and_controls_.html` Shows the treatment (red) and control (blue) NUTS3 regions with their details and ids. It also shows the limits for some LEZ downloaded from OpenStreetMap.org.
-    +  [Interactive link - click on cities to see the year of implementation and announcment year](htmlpages/treatedcontrol)
+  - `map_tr_and_controls.html` Shows the treatment (red) and control (blue) NUTS3 regions with their details and ids. It also shows the limits for some LEZ downloaded from OpenStreetMap.org.
+    +  [Interactive link - click on cities to see the details of their implementation](htmlpages/treatedcontrol)
 
 ## Guide on the repository:
 
