@@ -143,19 +143,19 @@ Cex.set <- .8
   plot(1960:2003,dataprep.out$Y1plot,
        type="l",ylim=c(0,33000),col="black",lty="solid",
        ylab ="per-capita GDP (PPP, 2002 USD)",
-       xlab ="year",
+       xlab ="",
        xaxs = "i", yaxs = "i",
        lwd=2
   )
   lines(1960:2003,aggregate(d[,c("gdp")],by=list(d$year),mean,na.rm=T)[,2]
-        ,col="black",lty="dashed",lwd=2) # mean 2
+        ,col="blue",lty="dashed",lwd=2) # mean 2
   abline(v=1990,lty="dotted")
   legend(x="bottomright",
-         legend=c("West Germany","rest of the OECD sample")
-         ,lty=c("solid","dashed"),col=c("black","black")
+         legend=c("West Germany","Rest of the OECD sample")
+         ,lty=c("solid","dashed"),col=c("black","blue")
          ,cex=.8,bg="white",lwd=c(2,2))
   arrows(1987,Text.height,1989,Text.height,col="black",length=.1)
-  text(1982.5,Text.height,"reunification",cex=Cex.set)
+  text(1982.5,Text.height,"Reunification",cex=Cex.set)
 }
 # dev.off()
 ```
@@ -170,18 +170,18 @@ synthY0 <- (dataprep.out$Y0%*%synth.out$solution.w)
   plot(1960:2003,dataprep.out$Y1plot,
        type="l",ylim=c(0,33000),col="black",lty="solid",
        ylab ="per-capita GDP (PPP, 2002 USD)",
-       xlab ="year",
+       xlab ="",
        xaxs = "i", yaxs = "i",
        lwd=2
   )
-  lines(1960:2003,synthY0,col="black",lty="dashed",lwd=2)
+  lines(1960:2003,synthY0,col="blue",lty="dashed",lwd=2)
   abline(v=1990,lty="dotted")
   legend(x="bottomright",
-         legend=c("West Germany","synthetic West Germany")
-         ,lty=c("solid","dashed"),col=c("black","black")
+         legend=c("West Germany","Synthetic West Germany")
+         ,lty=c("solid","dashed"),col=c("black","blue")
          ,cex=.8,bg="white",lwd=c(2,2))
   arrows(1987,Text.height,1989,Text.height,col="black",length=.1)
-  text(1982.5,Text.height,"reunification",cex=Cex.set)
+  text(1982.5,Text.height,"Reunification",cex=Cex.set)
 }
 
 # dev.off()

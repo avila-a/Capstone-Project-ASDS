@@ -1013,17 +1013,17 @@ treated_and_controls <- leaflet() %>%
             labels = "Limits for some LEZ",
             colors = c("green"),
             opacity = 1) %>%
+  addControl(html = "<b> From Umweltbundesamt: </b> <br/> All German LEZ (markers)",
+             position = "topright") %>%
   addLegend(labels = c("Germany"),
             colors = c("black"),
             opacity = 1) %>%
-  addControl(html = "<b> From Umweltbundesamt: </b> <br/> All German LEZ (markers)",
-             position = "topright") %>%
   setView(15, 50, zoom = 4)
 
-treated_and_controls
+# treated_and_controls
 
-# htmlwidgets::saveWidget(treated_and_controls,
-#                         file="map_tr_and_controls.html")
+htmlwidgets::saveWidget(treated_and_controls,
+                        file="map_tr_and_controls.html")
 ```
 
 For NUTS 2
