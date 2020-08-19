@@ -21,6 +21,7 @@ library(rvest)
 library("rgdal") # ReadOGR
 library(sf)
 # setwd("~/A - Estudios/LSE - Applied Social Data Science/Project/PM2.5/Data Europe/")
+library(lubridate)
 ```
 
 ## Get data from Urban Access Regulations (webpage)
@@ -359,7 +360,11 @@ gzones_sf_pol <- st_as_sf(gzones_sp_pol)
 #   plot(NUTS3_16, add = TRUE)
 #   plot(gzones_sp_pol, col = "red", add = TRUE)
 # }
+```
 
+### Do policy_map
+
+```{r}
 # New Leaflet map
 library(leaflet)
 library(htmlwidgets)
@@ -374,27 +379,46 @@ policy_map <- leaflet() %>%
               weight = 1,
               # opacity = NA,
               fill = NA) %>%
-  addPolygons(
-    data = gzones_sf_pol,
-    popup = paste0("<b> Name: </b>", gzones_sf_pol$KML,  
-                   "<br/> <b> In place since: </b>", gzones_sf_pol$InPlaceSince, 
-                   "<br/> <b> Country: </b>", gzones_sf_pol$TitelLocal,
-                   "<br/> <b> Source: </b> GreenZonesApp")) %>%
-  addCircleMarkers(
-    data = uar_sf, weight = NA,
-    opacity = 0.1,
-    color = NA,
-    fillColor = col_map[uar_sf$scheme_color],
-    fillOpacity = 0.9,
-    radius = col_size[uar_sf$scheme_color]*2,
-    popup = paste0("<b>", uar_sf$cityname, "</b> <br/>",
-                   "<b> Scheme: </b>", uar_sf$scheme, "<br/>",
-                   "<b> Source: </b> U.A.R")
-    ) %>% 
-  setView(15, 50, zoom = 3)
+  addPolygons(data = gzones_sf_pol,
+              popup = paste0("<b> Name: </b>", gzones_sf_pol$KML,  
+                             "<br/> <b> In place since: </b>",
+                             gzones_sf_pol$InPlaceSince, 
+                             "<br/> <b> Country: </b>",
+                             gzones_sf_pol$TitelLocal,
+                             "<br/> <b> Source: </b> GreenZones App")) %>%
+  addCircleMarkers(data = uar_sf, weight = NA,
+                   opacity = 0.1,
+                   color = NA,
+                   fillColor = col_map[uar_sf$scheme_color],
+                   fillOpacity = 0.9,
+                   radius = col_size[uar_sf$scheme_color]*2,
+                   popup = paste0("<b>", uar_sf$cityname,
+                                  "</b> <br/>",   
+                                  "<b> Scheme: </b>", 
+                                  uar_sf$scheme, "<br/>",
+                                  "<b> Source: </b> U.A.R")
+  ) %>%
+  # Add legends and titles
+  addControl(html = "<b> Map of LEZ implemented across Europe and similar legislation </b> <br/> (click objects for further information)",
+             position = "topright") %>%
+  addLegend(title = c("From urbanaccessregulations.eu:"),
+            labels = c("LEZ", "Urban toll", "Other regulation"),
+            colors = c("red", "blue", "green"),
+            opacity = 1) %>%
+  addLegend(title = c("From the 'Green Zones' App:"),
+            labels = c("Bounding box of a LEZ"),
+            colors = c("blue"),
+            opacity = 0.5) %>%
+  addLegend(labels = c("NUTS 3 regions"),
+            colors = c("black"),
+            opacity = 1      
+  ) %>% 
+  # addControl(html = "<b> From Umweltbundesamt: </b> <br/> All German LEZ (markers)",
+      #            position = "topright") %>%
+      setView(15, 50, zoom = 4) 
+    
 
-
-# policy_map
+policy_map
 
 # htmlwidgets::saveWidget(policy_map, file="policy_map.html")
 ```
@@ -917,7 +941,22 @@ nuts.sf.treated %>%
 # nuts.sf.treated <- readRDS("data/nuts_sf_treated")
 ```
 
+
 ## Maps of T and C !
+
+```{r}
+germany_base <- rnaturalearth::ne_countries(scale = "medium",
+                      country = "germany",
+                      returnclass = "sf")
+
+germany_base <- st_transform(germany_base, 
+                        '+proj=longlat +datum=WGS84') %>%
+  select(geometry) 
+
+germany <- germany_base %>%
+  st_cast("MULTILINESTRING")
+```
+
 
 ```{r}
 temp_treated <- nuts.sf.treated %>%
@@ -925,37 +964,66 @@ temp_treated <- nuts.sf.treated %>%
          LEVL_CODE == 3)
 
 temp_control <- nuts.sf.treated %>%
-  filter(with_umweltzonen_60km == FALSE,
+  mutate(contr_restr_60km = case_when(
+      with_umweltzonen_60km ~ FALSE,
+      with_gzones_point ~ FALSE,
+      with_uar_30km ~ FALSE,
+      TRUE ~ TRUE # if none of the past conditions, it's a control
+    )) %>%
+  filter(contr_restr_60km == TRUE,
          LEVL_CODE == 3)
 
 treated_and_controls <- leaflet() %>% 
   addTiles() %>%
+  addPolygons(data = germany_base, 
+              fill = FALSE, color = "black",
+              opacity = 1) %>%
+  addControl(html = "<b> Treated and Control Regions </b> (click on objects for further information)",
+             position = "topright") %>%
   addPolygons(data = temp_treated,
-              popup = paste0(
-                "<b>", temp_treated$NUTS_ID, "</b> <br/>",
-                "<b> Nuts name: </b>", 
+              popup = paste0("<b> Treated Region </b> <br/>",
+                "<b> NUTS ID: </b>", temp_treated$NUTS_ID, "<br/>",
+                "<b> Name: </b>", 
                 temp_treated$NUTS_NAME, "<br/>"),
               weight = 4, col = "red") %>%
   addPolygons(data = lez_shapes, col = "green") %>%
   addPolygons(data = temp_control,
               col = "blue",
-              popup = paste0(
-                "<b>", temp_control$NUTS_ID, "</b> <br/>",
+              popup = paste0("<b> Control Region </b> <br/>",
+                "<b> NUTS ID: </b>", temp_control$NUTS_ID, " <br/>",
                 "<b> Name: </b>", 
                 temp_control$NUTS_NAME, "<br/>")) %>%
-  # addMarkers(data = umweltzonen,
-  #            popup = paste0(
-  #              "<b>", umweltzonen$LEZ, "</b> <br/>",
-  #              "<b> Start date: </b>", umweltzonen$Stage_1, "<br/>",
-  #              "<b> Announcment date: </b>",
-  #              umweltzonen$Announcment, "<br/>",
-  #              "<b> Source: </b> Umweltzonen")) %>% 
-  setView(15, 50, zoom = 3)
+  addMarkers(data = umweltzonen,
+             popup = paste0(
+               "<b> Name of LEZ: ", umweltzonen$LEZ, "</b> <br/>",
+               "<b> Announcment date: </b>",
+               umweltzonen$Announcment, "<br/>",
+               "<b> Start date: </b>", 
+               umweltzonen$Stage_1, "<br/>",
+               "<b> Only yellow or green sticker: </b>",
+               umweltzonen$Stage_2, "<br/>",
+               "<b> Only green sticker: </b>", 
+               umweltzonen$Stage_3, "<br/>",
+               "<b> Source: </b> Umweltbundesamt")) %>%
+  addLegend(labels = c("Treated", "Control"),
+            colors = c("red", "blue"),
+            title = "Regions",
+            opacity = 1) %>%
+  addLegend(title = c("From Openstreetmap:"),
+            labels = "Limits for some LEZ",
+            colors = c("green"),
+            opacity = 1) %>%
+  addLegend(labels = c("Germany"),
+            colors = c("black"),
+            opacity = 1) %>%
+  addControl(html = "<b> From Umweltbundesamt: </b> <br/> All German LEZ (markers)",
+             position = "topright") %>%
+  setView(15, 50, zoom = 4)
 
 treated_and_controls
 
 # htmlwidgets::saveWidget(treated_and_controls,
-#                         file="map_tr_and_controls_nomark.html")
+#                         file="map_tr_and_controls.html")
 ```
 
 For NUTS 2
@@ -965,7 +1033,6 @@ temp_treated <- nuts.sf.treated %>%
   filter(treated_uz == TRUE,
          LEVL_CODE == 2) 
   
-
 temp_control <- nuts.sf.treated %>%
   filter(contr_restr_60km == TRUE,
          LEVL_CODE == 2)
@@ -988,15 +1055,75 @@ treated_and_controls_2 <- leaflet() %>%
               ) %>%
   addMarkers(data = umweltzonen,
              popup = paste0(
-               "<b>", umweltzonen$LEZ, "</b> <br/>",
+               "<b> Name: ", umweltzonen$LEZ, "</b> <br/>",
                "<b> Start date: </b>", umweltzonen$Stage_1, "<br/>",
-               "<b> Source: </b> Umweltzonen")) %>% 
+               "<b> Source: </b> Umweltbundesamt")) %>% 
   setView(15, 50, zoom = 3)
 
-# treated_and_controls_2
+treated_and_controls_2
 
 # htmlwidgets::saveWidget(treated_and_controls_2,
 #                         file="map_tr_and_controls_n2.html")
+```
+
+
+
+```{r}
+temp_treated <- nuts.sf.treated %>%
+  filter(treated_uz == TRUE,
+         LEVL_CODE == 3) %>%
+  select(NUTS_ID, NUTS_NAME, LEZ, State, 
+         Stage_1, Stage_2, Stage_3, Announcment)
+
+temp_control <- nuts.sf.treated %>%
+  mutate(contr_restr_60km = case_when(
+      with_umweltzonen_60km ~ FALSE,
+      with_gzones_point ~ FALSE,
+      with_uar_30km ~ FALSE,
+      TRUE ~ TRUE # if none of the past conditions, it's a control
+    )) %>%
+  filter(contr_restr_60km == TRUE,
+         LEVL_CODE == 3) %>%
+  select(NUTS_ID, NUTS_NAME)
+
+temp_lez_shapes <- lez_shapes %>%
+  select(name, start_date)
+
+
+treated_map <- mapview(temp_treated, 
+                       layer = "Treated regions", # color = NA,
+                       col.regions = "red",
+                       alpha.region = 0.5,
+                       map.types = c("OpenStreetMap.DE"))
+control_map <- mapview(temp_control, 
+                       layer = "Control regions",
+                       col.regions = "blue",
+                       alpha.region = 0.5,
+                       homebutton = FALSE,
+                       map.types = c("OpenStreetMap.DE"))
+germany_map <- mapview(germany, 
+                       alpha.regions = 0,
+                       layer.name = "Germany",
+                       col.regions = "black",
+                       color = "black", lwd = 3,
+                       map.types = c("OpenStreetMap.DE"))
+lez_map <- mapview(temp_lez_shapes, 
+                   col.regions = "green",
+                   alpha.region = 0.3,
+                   layer = "Limits of LEZ",
+                   homebutton = FALSE,
+                   map.types = c("OpenStreetMap.DE"))
+# germany_map + lez_map
+summary_map <- germany_map + treated_map + control_map + lez_map
+
+summary_map <- summary_map@map %>% 
+  setView(10, 50, zoom = 4)
+
+summary_map
+
+mapshot(summary_map, url = "summary_mapview.html",
+        # remove_url = TRUE,
+  remove_controls = c("layersControl"))
 ```
 
 For NUTS 2 (point)
@@ -1028,15 +1155,83 @@ treated_and_controls_2_point <- leaflet() %>%
               ) %>%
   addMarkers(data = umweltzonen,
              popup = paste0(
-               "<b>", umweltzonen$LEZ, "</b> <br/>",
+               "<b> Name: ", umweltzonen$LEZ, "</b> <br/>",
                "<b> Start date: </b>", umweltzonen$Stage_1, "<br/>",
-               "<b> Source: </b> Umweltzonen")) %>% 
+               "<b> Source: </b> Umweltbundesamt")) %>% 
   setView(15, 50, zoom = 3)
 
 # treated_and_controls_2_30
 
-htmlwidgets::saveWidget(treated_and_controls_2_point,
-                        file="map_tr_and_controls_n2_point.html")
+# htmlwidgets::saveWidget(treated_and_controls_2_point,
+                        # file="map_tr_and_controls_n2_point.html")
+```
+
+
+```{r}
+# 
+# policy_map <- leaflet() %>% 
+#   addTiles() %>% 
+#   addPolygons(data = nuts.sf,
+#               color = "black",
+#               weight = 1,
+#               # opacity = NA,
+#               fill = NA) %>%
+#   addPolygons(
+#     data = gzones_sf_pol,
+#     popup = paste0("<b> Name: </b>", gzones_sf_pol$KML,  
+#                    "<br/> <b> In place since: </b>", gzones_sf_pol$InPlaceSince, 
+#                    "<br/> <b> Country: </b>", gzones_sf_pol$TitelLocal,
+#                    "<br/> <b> Source: </b> GreenZonesApp")) %>%
+#   addCircleMarkers(
+#     data = uar_sf, weight = NA,
+#     opacity = 0.1,
+#     color = NA,
+#     fillColor = col_map[uar_sf$scheme_color],
+#     fillOpacity = 0.9,
+#     radius = col_size[uar_sf$scheme_color]*2,
+#     popup = paste0("<b>", uar_sf$cityname, "</b> <br/>",
+#                    "<b> Scheme: </b>", uar_sf$scheme, "<br/>",
+#                    "<b> Source: </b> U.A.R")
+#     ) %>% 
+#   setView(15, 50, zoom = 3)
+
+uar_sf_temp <- uar_sf %>%
+  select(cityname, introtext, scheme, scheme_color) %>%
+  mutate(scheme_color = -scheme_color + 4)
+
+uar_map <- mapview(uar_sf_temp, zcol = "scheme",
+                   col.regions =  c("red", "gray", NA, "blue"),
+                   cex = "scheme_color",
+                   homebutton = FALSE, 
+                   layer.name = "From urbanaccessregulations.eu",
+                       map.types = c("OpenStreetMap.DE"))
+
+gzones_sf_pol_temp <- gzones_sf_pol %>% 
+  select(KML, TitelLocal, InPlaceSince)
+
+gz_map <- mapview(gzones_sf_pol_temp, 
+                  layer.name = "LEZ from Green Zones App",
+                  homebutton = FALSE,
+                  map.types = c("OpenStreetMap.DE"))
+
+nuts_3_map <- nuts.sf %>%
+  filter(LEVL_CODE == 3) %>%
+  st_cast("MULTILINESTRING") %>%
+  select("NUTS_ID", "CNTR_CODE", "NUTS_NAME") %>%
+  mapview(homebutton = FALSE, 
+          color = "black",
+          alpha = 0.2,
+          layer.name = "NUTS3 regions",
+          map.types = c("OpenStreetMap.DE"))
+
+policy_mapview <- nuts_3_map + uar_map +  gz_map
+uar_map
+
+policy_mapview@map %>% 
+  setView(10, 50, zoom = 4) %>%
+  mapshot(url = "policy_mapview.html",
+        # remove_url = TRUE,
+  remove_controls = c("layersControl"))
 ```
 
 end
