@@ -231,6 +231,8 @@ Help: https://pro.arcgis.com/en/pro-app/tool-reference/spatial-analyst/zonal-sta
 # # loop over each file
 # for i in list_dta:
 # 	ZonalStatisticsAsTable("nuts_sf", "NUTS_ID", i, "table_" + i, "DATA")
+
+# Note: Tables are saved in the same folder!
 ```
 
 Import pollution data:
@@ -255,7 +257,7 @@ dbf_pol <- (dbf_files %>%stringr::str_subset( pattern = "table_pol"))[1:16]
 import_multiple_dbf <- function(list_files){
   dta = list(NULL)
   for (i in 1:length(list_files)){
-    dta[[i]] = read.dbf(list_files[i])
+    dta[[i]] = foreign::read.dbf(list_files[i])
     dta[[i]]$year = i
   }
   dta <- data.table::rbindlist(dta) %>% as.data.frame()
